@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#183b30"><title>{% block title %}COMPVVD · Compétitions{% endblock %}</title><link rel="stylesheet" href="{{url_for('static',filename='style.css')}}"><script src="{{url_for('static',filename='app.js')}}" defer></script></head>
+<body data-server-time="{{now}}"><div class="layout">
+<aside class="sidebar no-print"><a class="brand" href="/">COMP<span>VVD</span></a><small>LE TEMPS DE LA COMPÉTITION</small>
+<nav>{% if user %}<a href="/">Compétitions</a>{% if user.role=='admin' %}<a href="/admin">Clubs & comptes</a>{% endif %}<a href="/account">Mon compte</a>{% endif %}<a href="/public">Résultats en direct</a></nav>
+<footer>{% if user %}<strong>{{user.name}}</strong><small>{{roles[user.role]}}</small><form method="post" action="/logout" class="ajax"><input type="hidden" name="csrf" value="{{csrf}}"><button class="ghost">Se déconnecter</button></form>{% else %}<a href="/login">Connexion à l’organisation →</a>{% endif %}</footer></aside>
+<main>{% block content %}{% endblock %}</main></div><div id="notice" role="alert" aria-live="polite"></div></body></html>

@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+.venv/
+data/
+*.sqlite3*
+.env
+.session-secret
+playwright-report/
+test-results/

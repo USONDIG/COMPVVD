@@ -1,0 +1,27 @@
+{% macro field(label,name,type='text',value='',required=true,min='',max='',step='') -%}
+<div class="field"><label>{{label}}<input type="{{type}}" name="{{name}}" value="{{value}}" {% if required %}required{% endif %} {% if min!='' %}min="{{min}}"{% endif %} {% if max!='' %}max="{{max}}"{% endif %} {% if step!='' %}step="{{step}}"{% endif %} {% if type=='password' %}autocomplete="new-password" minlength="12" maxlength="256"{% endif %}></label></div>
+{%- endmacro %}
+{% macro status(s) %}<span class="pill {{s}}">{{labels.get(s,s)}}</span>{% endmacro %}
+{% macro post(c,action,t=none,m=none,confirm='') %}
+<form class="ajax" method="post" action="/c/{{c.id}}/action" {% if confirm %}data-confirm="{{confirm}}"{% endif %}>
+<input type="hidden" name="csrf" value="{{csrf}}"><input type="hidden" name="revision" value="{{c.revision}}"><input type="hidden" name="action" value="{{action}}">
+{% if t %}<input type="hidden" name="table" value="{{t.id}}">{% endif %}{% if m %}<input type="hidden" name="match" value="{{m.id}}">{% endif %}
+{{caller()}}</form>{% endmacro %}
+{% macro participant_fields(p,open,grades) %}
+<div class="grid2">{{field('Nom et prénom','name',value=p.get('name',''))}}{{field('Date de naissance','birth','date',p.get('birth',''))}}
+<label>Sexe<select name="sex"><option value="F" {% if p.get('sex')=='F' %}selected{% endif %}>Féminin</option><option value="M" {% if p.get('sex')=='M' %}selected{% endif %}>Masculin</option></select></label>
+{{field('Poids déclaré (kg)','weight','number',p.get('weight',''),min=1,max=350,step='0.1')}}
+<label>Grade<select name="grade">{% for grade in grades %}<option value="{{loop.index0}}" {% if p.get('grade')==loop.index0 %}selected{% endif %}>{{grade}}</option>{% endfor %}</select></label></div>
+<div class="checks">{% for name in open %}<label><input type="checkbox" name="disciplines" value="{{name}}" {% if name in p.get('disciplines',[]) %}checked{% endif %}>{{name}}</label>{% endfor %}</div>
+{% endmacro %}
+{% macro bracket(c,t,names) %}
+<div class="bracket">{% for turn,matches in t.matches|groupby('turn') %}<section class="round"><h3>Tour {{turn}}</h3>{% for m in matches %}<article class="bout"><div class="row between"><small>{{'Places 3 et 4' if m.kind=='bronze' else 'Combat complémentaire' if m.kind=='odd' else 'Confrontation'}}</small><span class="pill {{m.state}}">{{m.state}}</span></div><div class="fighter-row {{'winner' if m.winner==m.a else ''}}"><span>{{names.get(m.a,'Participant')}}</span><b>{{m.sa}}</b></div><div class="fighter-row {{'winner' if m.winner==m.b else ''}}"><span>{{names.get(m.b,'Participant')}}</span><b>{{m.sb}}</b></div>{% if m.reason and m.reason!='points' %}<small>{{m.reason}}</small>{% endif %}</article>{% endfor %}</section>{% endfor %}</div>
+{% if t.places %}<div class="podium">{% for rank,pid in t.places.items() %}<div><strong>{{rank}}<sup>{{'er' if rank=='1' else 'e'}}</sup></strong> {{names.get(pid,'Participant')}}</div>{% endfor %}</div>{% endif %}
+{% endmacro %}
+{% macro ranking(c,rankings,clubs) %}
+{% set names={} %}{% for p in c.people %}{% set _=names.update({p.id:p.name}) %}{% endfor %}
+<div class="grid2">{% for group,entries in rankings.items() %}<section class="panel"><h2>{{group}}{% if group=='Enfants' %} · moins de 12 ans{% elif group=='Adultes' %} · 12 ans et plus{% endif %}</h2><table><thead><tr><th>Rang</th><th>{{'Club' if group=='Clubs' else 'Participant'}}</th><th>Points</th></tr></thead><tbody>{% for r in entries %}<tr><td>{{r.rank}}</td><td>{{clubs.get(r.id,'Club') if group=='Clubs' else names.get(r.id,'Participant')}}</td><td><strong>{{r.points}}</strong></td></tr>{% else %}<tr><td colspan="3">Aucun résultat.</td></tr>{% endfor %}</tbody></table></section>{% endfor %}</div>{% endmacro %}
+{% macro board(c,t,m,names,area) %}
+<div class="scoreboard"><div class="row between"><span>{{area}} · {{t.name}}</span><small>{{'Places 3 et 4' if m.kind=='bronze' else 'Tour '~m.turn}}</small></div>
+<div class="clock" data-clock="{{m.timer|tojson|forceescape}}">—</div><div class="clock-label">{% if m.state=='rest' %}Pause · prochain round lancé manuellement{% elif m.timer and m.timer.duration==none %}Mort subite{% elif m.rounds|length>=t.rounds %}Prolongation {{m.rounds|length-t.rounds+1}}{% else %}Round {{m.rounds|length+1}} / {{t.rounds}}{% endif %}</div>
+<div class="score-sides"><div class="red"><h2>{{names.get(m.a,'Participant')}}</h2><strong>{{m.sa}}</strong><small>ROUGE</small></div><span>VS</span><div class="blue"><h2>{{names.get(m.b,'Participant')}}</h2><strong>{{m.sb}}</strong><small>BLEU</small></div></div></div>{% endmacro %}
