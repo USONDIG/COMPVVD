@@ -192,3 +192,43 @@ class WebTests(unittest.TestCase):
             r=self.post("/login",dict(username="wrong",password="wrong"))
             self.assertEqual(r.status_code,401)
         self.assertEqual(self.post("/login",dict(username="wrong",password="wrong")).status_code,429)
+
+    def test_lutte_operator_flow_and_correction(self):
+        c=self.c
+        c['open']=[]
+        for p in c['people']: p['disciplines'].append('Lutte')
+        with closing(connect(self.app.config['DATABASE'])) as db:
+            db.execute('UPDATE competitions SET state=? WHERE id=?',(json.dumps(c),c['id']))
+            db.commit()
+        self.login('organizer')
+        def act(name,**kw):
+            _,rev=self.stored()
+            r=self.action(name,revision=rev,**kw)
+            self.assertEqual(r.status_code,200,r.data)
+        act('generate',discipline='Lutte')
+        c,_=self.stored(); t=c['tables'][0]; tid=t['id']
+        act('configure',table=tid,area='aire',referee='3')
+        act('draw',table=tid)
+        self.login('assistant2')
+        _,rev=self.stored()
+        self.assertEqual(self.action('start_table',revision=rev,table=tid).status_code,403)
+        self.login('assistant')
+        act('start_table',table=tid)
+        c,_=self.stored(); m=c['tables'][0]['matches'][0]; mid=m['id']
+        act('start',table=tid,match=mid)
+        page=self.client.get(f'/c/{c["id"]}/table/{tid}')
+        self.assertEqual(page.status_code,200)
+        self.assertIn('Valider le point',page.text)
+        self.assertNotIn('Valider les six scores',page.text)
+        c,rev=self.stored()
+        self.assertIsNone(c['tables'][0]['matches'][0]['timer']['duration'])
+        self.assertEqual(self.action('sudden',revision=rev,table=tid,match=mid).status_code,422)
+        act('lutte_point',table=tid,match=mid,winner=m['a'])
+        self.login('organizer')
+        act('correct',table=tid,match=mid,count='0',winner=m['b'],reason='points',duration='35.7')
+        c,_=self.stored(); result=c['tables'][0]['matches'][0]
+        self.assertEqual(result['winner'],m['b'])
+        self.assertEqual(result['timer']['elapsed'],35.7)
+        act('advance',table=tid)
+        c,_=self.stored()
+        self.assertEqual(c['tables'][0]['status'],'closed')

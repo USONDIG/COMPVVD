@@ -126,7 +126,7 @@ def mutate(c,action,data):
         d.require(not any(x["name"].casefold()==p["name"].casefold() and x["birth"]==p["birth"] and x["club"]==p["club"] for x in c["people"]),"Participant déjà inscrit.")
         c["people"].append(dict(p,id=d.uid(),status="pending"))
         return
-    operator_actions={"start_table","advance","start","pause","score","sudden","decision"}
+    operator_actions={"start_table","advance","start","pause","score","sudden","decision","lutte_point"}
     if action not in operator_actions:
         manager(c)
     if action in ("approve","reject","edit"):
@@ -164,9 +164,10 @@ def mutate(c,action,data):
     elif action=="official":
         c["officials"].append(dict(id=d.uid(),name=text(data.get("name"),"Nom"),qualification=text(data.get("qualification"),"Qualification")))
     elif action=="generate":
-        d.generate(c)
+        d.generate(c,data.get("discipline","Combat"))
     elif action=="merge":
         source,target=find(c["tables"],data.get("source")),find(c["tables"],data.get("target"))
+        d.require(source["discipline"]==target["discipline"],"Fusion entre disciplines interdite.")
         d.require(source!=target and source["status"]==target["status"]=="draft","Fusion entre deux tableaux avant tirage uniquement.")
         target["members"]+=source["members"]
         target["name"]+=" / "+source["name"]
@@ -181,13 +182,13 @@ def mutate(c,action,data):
             find(c["areas"],data.get("area"))
             judges=data.getlist("judges")
             referee=data.get("referee")
-            d.require(len(judges)==3 and len(set(judges+[referee]))==4,"Trois juges distincts et un arbitre distinct requis.")
+            d.require((not judges and referee) if t["discipline"]=="Lutte" else len(judges)==3 and len(set(judges+[referee]))==4,"Officiels invalides : arbitre seul en Lutte, trois juges et arbitre distincts en Combat.")
             for official in judges+[referee]:
                 find(c["officials"],official)
             t.update(area=data["area"],judges=judges,referee=referee,
-                     rounds=d.integer(int(data["rounds"]),1,20,"Rounds"),
-                     seconds=d.integer(int(data["seconds"]),1,1800,"Durée"),
-                     rest=d.integer(int(data["rest"]),0,600,"Pause"))
+                     rounds=1 if t["discipline"]=="Lutte" else d.integer(int(data["rounds"]),1,20,"Rounds"),
+                     seconds=0 if t["discipline"]=="Lutte" else d.integer(int(data["seconds"]),1,1800,"Durée"),
+                     rest=0 if t["discipline"]=="Lutte" else d.integer(int(data["rest"]),0,600,"Pause"))
         elif action=="draw":
             d.draw(c,t)
         elif action=="start_table":
@@ -202,7 +203,7 @@ def mutate(c,action,data):
                 d.require(not any(x["id"]!=t["id"] and x["status"]=="active" and x["area"]==t["area"] for x in c["tables"]),"Cette aire accueille un autre tableau.")
                 count=d.integer(int(data["count"]),0,22,"Nombre de rounds")
                 scores=[[[int(data[f"r{i}_{s}_{j}"]) for j in range(3)] for s in range(2)] for i in range(count)]
-                d.correct(t,m,scores,data.get("winner"),data.get("reason"),data.getlist("votes"))
+                d.correct(t,m,scores,data.get("winner"),data.get("reason"),data.getlist("votes"),float(data.get("duration","0")) if t["discipline"]=="Lutte" else None)
                 return
             d.require(t["status"]=="active","Le tableau n’est pas en cours.")
             if action=="start":
@@ -212,7 +213,10 @@ def mutate(c,action,data):
             elif action=="score":
                 scores=[[int(data[f"{s}{j}"]) for j in range(3)] for s in ("a","b")]
                 d.score(t,m,scores)
+            elif action=="lutte_point":
+                d.lutte_point(t,m,data.get("winner"))
             elif action=="sudden":
+                d.require(t["discipline"]=="Combat","La mort subite ne concerne pas la Lutte.")
                 d.sudden(m,data.getlist("votes"))
             elif action=="decision":
                 d.require(m["state"] in ("pending","running","paused","rest"),"Résultat déjà validé.")
