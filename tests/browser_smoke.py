@@ -51,6 +51,7 @@ with tempfile.TemporaryDirectory() as tmp:
         page.get_by_role("button",name="Reprendre le chronomètre").wait_for()
         expect(validate).to_be_disabled()
         page.get_by_role("button",name="Reprendre le chronomètre").click()
+        page.get_by_role("button",name="Suspendre le chronomètre").wait_for()
         page.locator('input[name="a0"]').fill("4")
         expect(validate).to_be_enabled(timeout=10000)
         expect(page.locator(".clock")).to_have_class("clock clock-ended")
