@@ -7,7 +7,7 @@ import tempfile
 import threading
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
 from werkzeug.serving import make_server
 from app.web import create_app,connect
 from app import domain as d
@@ -19,7 +19,7 @@ with tempfile.TemporaryDirectory() as tmp:
     c["open"]=[]
     d.generate(c)
     t=c["tables"][0]
-    t.update(area="aire",judges=["0","1","2"],referee="3")
+    t.update(area="aire",judges=["0","1","2"],referee="3",seconds=5)
     d.draw(c,t)
     with closing(connect(app.config["DATABASE"])) as db:
         db.execute("UPDATE competitions SET state=? WHERE id=?",(json.dumps(c),c["id"]))
@@ -45,19 +45,34 @@ with tempfile.TemporaryDirectory() as tmp:
         page.get_by_role("button",name="Suspendre le chronomètre").wait_for()
         assert page.locator('input[name="a0"]').count()==1
         page.locator('input[name="a0"]').fill("4")
-        page.get_by_role("button",name="Valider les six scores").click()
-        page.locator("#notice.show").wait_for()
+        validate=page.get_by_role("button",name="Valider les six scores")
+        expect(validate).to_be_disabled()
+        page.get_by_role("button",name="Suspendre le chronomètre").click()
+        page.get_by_role("button",name="Reprendre le chronomètre").wait_for()
+        expect(validate).to_be_disabled()
+        page.get_by_role("button",name="Reprendre le chronomètre").click()
+        page.locator('input[name="a0"]').fill("4")
+        expect(validate).to_be_enabled(timeout=10000)
+        expect(page.locator(".clock")).to_have_class("clock clock-ended")
+        expect(page.locator("[data-round-ended]")).to_be_visible()
         assert page.locator('input[name="a0"]').input_value()=="4"
         page.screenshot(path="test-results/table-desktop.png",full_page=True)
         page.set_viewport_size({"width":390,"height":844})
         page.screenshot(path="test-results/table-mobile.png",full_page=True)
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 2")
+        validate.click()
+        page.get_by_role("button",name="Lancer le prochain round").wait_for()
         viewer=browser.new_page(viewport={"width":1024,"height":768})
         viewer.goto(base+"/public")
         viewer.get_by_label("Code de compétition").fill(c["code"])
         viewer.get_by_role("button",name="Voir les résultats").click()
         viewer.get_by_role("heading",name="Coupe de test").wait_for()
         assert "2000-04-12" not in viewer.content()
+        viewer.get_by_label("Aire à suivre").select_option("aire")
+        viewer.get_by_label("Tableau à suivre").select_option(t["id"])
+        viewer.reload()
+        expect(viewer.get_by_label("Tableau à suivre")).to_have_value(t["id"])
+        expect(viewer.locator('[data-tree]')).to_be_visible()
         viewer.screenshot(path="test-results/public-tablet.png",full_page=True)
         assert not errors,errors
         browser.close()
