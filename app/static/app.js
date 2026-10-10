@@ -53,3 +53,48 @@ function filterAreas(){if(!filter)return;for(const el of document.querySelectorA
 if(filter){filter.value=sessionStorage.getItem('area')||'';filterAreas();filter.addEventListener('change',()=>{sessionStorage.setItem('area',filter.value);filterAreas();});if(sessionStorage.getItem('screen')==='1')document.body.classList.add('screen');}
 tick();setInterval(tick,200);
 setInterval(async()=>{if(!document.querySelector('[data-live]')||dirty||busy||document.hidden||['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName))return;try{const r=await fetch('/health',{cache:'no-store'});if(r.ok)location.reload();else showError('Connexion indisponible. Résultats non actualisés.');}catch(e){showError('Connexion interrompue. Affichage du dernier état reçu.');}},5000);
+
+function renderTrees(){
+ for(const canvas of document.querySelectorAll('[data-tree]')){
+  const cards=[...canvas.querySelectorAll('[data-bout]')],svg=canvas.querySelector('svg');
+  svg.replaceChildren();
+  const columnKeys=[...new Set(cards.map(c=>Number(c.dataset.turn)*2+(c.dataset.kind==='odd'?1:0)))].sort((a,b)=>a-b);
+  const latest=new Map(),bottoms=new Map(),nodes=new Map(),edges=[];
+  let height=0;
+  for(const card of cards){
+   const d=card.dataset,col=columnKeys.indexOf(Number(d.turn)*2+(d.kind==='odd'?1:0));
+   const sources=['a','b'].map(side=>({side,pid:d[side],source:latest.get(d[side])})).filter(x=>x.source);
+   const x=col*340;
+   let y=Math.max(24,bottoms.get(col)||24);
+   if(sources.length)y=Math.max(y,sources.reduce((s,e)=>s+e.source.y+e.source.h/2,0)/sources.length-card.offsetHeight/2);
+   card.style.left=x+'px';card.style.top=y+'px';
+   const node={card,x,y,h:card.offsetHeight,w:card.offsetWidth};
+   nodes.set(d.bout,node);bottoms.set(col,y+node.h+32);height=Math.max(height,y+node.h+24);
+   for(const edge of sources){
+    const source=edge.source;
+    // A repechage is an explicit second path from the previous losing bout.
+    const kind=d.kind==='bronze'?'bronze':source.card.dataset.winner===edge.pid?'qualified':'repechage';
+    edges.push({source,node,side:edge.side,kind});
+   }
+   // A placement bout must not replace the source of a championship path.
+   if(d.kind!=='bronze')for(const side of ['a','b'])latest.set(d[side],node);
+  }
+  const width=Math.max(280,columnKeys.length*340-60);
+  canvas.style.width=width+'px';canvas.style.height=height+'px';
+  svg.setAttribute('width',width);svg.setAttribute('height',height);
+  for(const {source,node,side,kind} of edges){
+   const row=node.card.querySelector('[data-side="'+side+'"]');
+   const x1=source.x+source.w,y1=source.y+source.h/2,x2=node.x,y2=node.y+row.offsetTop+row.offsetHeight/2;
+   const mid=x1+(x2-x1)/2,path=document.createElementNS('http://www.w3.org/2000/svg','path');
+   path.setAttribute('d',`M ${x1} ${y1} H ${mid} V ${y2} H ${x2}`);
+   path.setAttribute('class','tree-link '+kind);svg.appendChild(path);
+  }
+  const scroll=canvas.parentElement,key='tree-scroll:'+location.pathname+':'+canvas.dataset.tree;
+  scroll.scrollLeft=Number(sessionStorage.getItem(key)||0);
+  if(!scroll.dataset.bound){scroll.addEventListener('scroll',()=>sessionStorage.setItem(key,String(scroll.scrollLeft)),{passive:true});scroll.dataset.bound='1';}
+ }
+}
+renderTrees();
+window.addEventListener('resize',renderTrees);
+document.fonts?.ready.then(renderTrees);
+document.getElementById('area-filter')?.addEventListener('change',renderTrees);
