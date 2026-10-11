@@ -22,4 +22,3 @@ Les cinq autres disciplines (Lutte, Kata, Kata Arme, Combat équipe, Kata synchr
 L’application doit être hébergée en ligne avec authentification et base de données persistante. La publication du code sur GitHub ne met pas l’application en ligne. Un hébergement de serveur web sera nécessaire ; GitHub Pages seul ne convient pas.
 
 Voir [le plan de développement](docs/ROADMAP.md) et [les décisions restant à préciser](docs/DECISIONS.md).
-

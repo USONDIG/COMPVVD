@@ -202,4 +202,3 @@ class CombatTests(unittest.TestCase):
         c,t=fixture(2)
         with self.assertRaises(d.RuleError):
             d.draw(c,t)
-
