@@ -20,6 +20,8 @@ from flask import Flask, abort, g, jsonify, redirect, render_template, request, 
 from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import domain as d
+from .imports import read_registration_file
+from werkzeug.datastructures import MultiDict
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS clubs(id TEXT PRIMARY KEY,name TEXT NOT NULL UNIQUE);
@@ -28,6 +30,7 @@ CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY,name TEXT NOT NULL,username
 CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY,user_id TEXT REFERENCES users(id),expires REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS competitions(id TEXT PRIMARY KEY,state TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,stamp REAL,actor TEXT,competition TEXT,action TEXT,detail TEXT);
+CREATE TABLE IF NOT EXISTS import_batches(id TEXT PRIMARY KEY,owner TEXT,competition TEXT,revision INTEGER,payload TEXT,expires REAL);
 CREATE TABLE IF NOT EXISTS attempts(key TEXT PRIMARY KEY,stamp REAL,count INTEGER);
 """
 
@@ -78,7 +81,7 @@ def competition(cid):
     r=g.db.execute("SELECT * FROM competitions WHERE id=?",(cid,)).fetchone()
     if not r:
         abort(404)
-    c=json.loads(r["state"])
+    c=d.normalize_competition(json.loads(r["state"]))
     c["revision"]=r["revision"]
     return c
 
@@ -112,8 +115,8 @@ def participant(data,c,club):
     d.require(disciplines and len(set(disciplines))==len(disciplines) and all(x in d.DISCIPLINES for x in disciplines),"Disciplines invalides.")
     p=dict(name=name,birth=birth.isoformat(),sex=sex,weight=weight,grade=grade,club=club,disciplines=disciplines)
     d.age_index(p,c)
-    if "Combat équipe" in disciplines:
-        d.require(c["season"]-birth.year>=18,"Combat équipe réservé aux seniors.")
+    if "Dau équipe" in disciplines:
+        d.require(c["season"]-birth.year>=18,"Dau équipe réservé aux seniors.")
     return p
 
 def mutate(c,action,data):
@@ -126,7 +129,7 @@ def mutate(c,action,data):
         d.require(not any(x["name"].casefold()==p["name"].casefold() and x["birth"]==p["birth"] and x["club"]==p["club"] for x in c["people"]),"Participant déjà inscrit.")
         c["people"].append(dict(p,id=d.uid(),status="pending"))
         return
-    operator_actions={"start_table","advance","start","pause","score","sudden","decision","lutte_point"}
+    operator_actions={"start_table","advance","start","pause","score","sudden","decision","vat_point"}
     if action not in operator_actions:
         manager(c)
     if action in ("approve","reject","edit"):
@@ -164,7 +167,7 @@ def mutate(c,action,data):
     elif action=="official":
         c["officials"].append(dict(id=d.uid(),name=text(data.get("name"),"Nom"),qualification=text(data.get("qualification"),"Qualification")))
     elif action=="generate":
-        d.generate(c,data.get("discipline","Combat"))
+        d.generate(c,data.get("discipline","Dau"))
     elif action=="merge":
         source,target=find(c["tables"],data.get("source")),find(c["tables"],data.get("target"))
         d.require(source["discipline"]==target["discipline"],"Fusion entre disciplines interdite.")
@@ -182,7 +185,7 @@ def mutate(c,action,data):
             find(c["areas"],data.get("area"))
             judges=data.getlist("judges")
             referee=data.get("referee")
-            d.require((not judges and referee) if t["discipline"]=="Lutte" else len(judges)==3 and len(set(judges+[referee]))==4,"Officiels invalides : arbitre seul en Lutte, trois juges et arbitre distincts en Combat.")
+            d.require((not judges and referee) if t["discipline"]=="Vat" else len(judges)==3 and len(set(judges+[referee]))==4,"Officiels invalides : arbitre seul en Vat, trois juges et arbitre distincts en Dau.")
             for official in judges+[referee]:
                 find(c["officials"],official)
             t.update(area=data["area"],judges=judges,referee=referee,
@@ -202,8 +205,8 @@ def mutate(c,action,data):
             if action=="correct":
                 d.require(not any(x["id"]!=t["id"] and x["status"]=="active" and x["area"]==t["area"] for x in c["tables"]),"Cette aire accueille un autre tableau.")
                 count=d.integer(int(data["count"]),0,22,"Nombre de rounds")
-                scores=[[[int(data[f"r{i}_{s}_{j}"]) for j in range(1 if t["discipline"]=="Lutte" else 3)] for s in range(2)] for i in range(count)]
-                d.correct(t,m,scores,data.get("winner"),data.get("reason"),data.getlist("votes"),float(data.get("duration","0")) if t["discipline"]=="Lutte" else None)
+                scores=[[[int(data[f"r{i}_{s}_{j}"]) for j in range(1 if t["discipline"]=="Vat" else 3)] for s in range(2)] for i in range(count)]
+                d.correct(t,m,scores,data.get("winner"),data.get("reason"),data.getlist("votes"),float(data.get("duration","0")) if t["discipline"]=="Vat" else None)
                 return
             d.require(t["status"]=="active","Le tableau n’est pas en cours.")
             if action=="start":
@@ -211,12 +214,12 @@ def mutate(c,action,data):
             elif action=="pause":
                 d.pause(m)
             elif action=="score":
-                scores=[[int(data[f"{s}{j}"]) for j in range(1 if t["discipline"]=="Lutte" else 3)] for s in ("a","b")]
+                scores=[[int(data[f"{s}{j}"]) for j in range(1 if t["discipline"]=="Vat" else 3)] for s in ("a","b")]
                 d.score(t,m,scores)
-            elif action=="lutte_point":
-                d.lutte_point(t,m,data.get("winner"))
+            elif action=="vat_point":
+                d.vat_point(t,m,data.get("winner"))
             elif action=="sudden":
-                d.require(t["discipline"]=="Combat","La mort subite ne concerne pas la Lutte.")
+                d.require(t["discipline"]=="Dau","La mort subite ne concerne pas la Vat.")
                 d.sudden(m,data.getlist("votes"))
             elif action=="decision":
                 d.require(m["state"] in ("pending","running","paused","rest"),"Résultat déjà validé.")
@@ -263,7 +266,7 @@ def create_app(config=None):
     app=Flask(__name__)
     app.config.update(DATABASE=os.environ.get("DATABASE_PATH","data/compvvd.sqlite3"),
         SECRET_KEY=os.environ.get("SECRET_KEY"),SESSION_COOKIE_SECURE=os.environ.get("COOKIE_SECURE","true")!="false",
-        SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE="Strict",MAX_CONTENT_LENGTH=200000,
+        SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE="Strict",MAX_CONTENT_LENGTH=3*1024*1024,
         MAX_FORM_PARTS=200,PERMANENT_SESSION_LIFETIME=43200)
     if config:
         app.config.update(config)
@@ -482,6 +485,55 @@ def create_app(config=None):
         operator(c,t)
         return render_template("table.html",c=c,t=t,manager=managed(c),people={p["id"]:p for p in c["people"]},
             officials={o["id"]:o["name"] for o in c["officials"]},area=next((a for a in c["areas"] if a["id"]==t["area"]),{}))
+
+    @app.get("/c/<cid>/import/template")
+    def import_template(cid):
+        c=competition(cid)
+        if not (g.user["role"]=="club" or managed(c)):
+            abort(403)
+        return send_file(Path(app.root_path)/"assets"/"modele-inscriptions.xlsx",as_attachment=True,
+                         download_name="modele-inscriptions.xlsx")
+
+    @app.route("/c/<cid>/import",methods=["GET","POST"])
+    def import_registrations(cid):
+        c=competition(cid)
+        if g.user["role"]!="club":
+            abort(403)
+        errors=[];preview=[];batch=None
+        if request.method=="POST":
+            g.db.execute("DELETE FROM import_batches WHERE expires<?",(time.time(),))
+            if request.form.get("confirm"):
+                saved=g.db.execute("SELECT * FROM import_batches WHERE id=? AND owner=? AND competition=?",
+                                   (request.form["confirm"],g.user["id"],cid)).fetchone()
+                d.require(saved is not None,"Prévisualisation expirée ou déjà importée. Rechargez votre fichier.")
+                if saved["revision"]!=c["revision"]:
+                    abort(409,description="La compétition a changé. Rechargez le fichier pour contrôler les inscriptions à nouveau.")
+                preview=json.loads(saved["payload"])
+                for item in preview:
+                    mutate(c,"register",MultiDict(item["fields"]))
+                c.pop("revision")
+                g.db.execute("UPDATE competitions SET state=?,revision=revision+1 WHERE id=?",(json.dumps(c,ensure_ascii=False),cid))
+                g.db.execute("DELETE FROM import_batches WHERE id=?",(saved["id"],))
+                audit("import_excel",cid,{"count":len(preview),"club":g.user["club"]})
+                return render_template("import.html",c=c,imported=len(preview))
+            file=request.files.get("file")
+            d.require(file and file.filename.lower().endswith(".xlsx"),"Choisissez un fichier Excel .xlsx (pas .xls ni .xlsm).")
+            data=file.read(2*1024*1024+1)
+            d.require(len(data)<=2*1024*1024,"Fichier trop volumineux : 2 Mo maximum.")
+            entries,errors=read_registration_file(data)
+            scratch=json.loads(json.dumps(c))
+            for line,fields in entries:
+                try:
+                    mutate(scratch,"register",MultiDict(fields))
+                    p=scratch["people"][-1]
+                    preview.append(dict(line=line,name=p["name"],birth=p["birth"],sex=p["sex"],weight=p["weight"],grade=d.GRADES[p["grade"]],disciplines=p["disciplines"],fields=fields))
+                except (d.RuleError,ValueError,TypeError,KeyError) as exc:
+                    errors.append(dict(line=line,message=str(exc) if isinstance(exc,d.RuleError) else "Date, poids ou grade invalide."))
+            if not errors:
+                batch=secrets.token_urlsafe(32)
+                g.db.execute("DELETE FROM import_batches WHERE owner=? AND competition=?",(g.user["id"],cid))
+                g.db.execute("INSERT INTO import_batches VALUES(?,?,?,?,?,?)",(batch,g.user["id"],cid,c["revision"],json.dumps(preview),time.time()+1800))
+        return render_template("import.html",c=c,errors=errors,preview=preview,batch=batch,imported=None)
 
     @app.get("/c/<cid>/export")
     def export(cid):

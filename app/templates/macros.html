@@ -15,7 +15,7 @@
 <div class="checks">{% for name in open %}<label><input type="checkbox" name="disciplines" value="{{name}}" {% if name in p.get('disciplines',[]) %}checked{% endif %}>{{name}}</label>{% endfor %}</div>
 {% endmacro %}
 {% macro bracket(c,t,names) %}
-<div class="bracket">{% for turn,matches in t.matches|groupby('turn') %}<section class="round"><h3>Tour {{turn}}</h3>{% for m in matches %}<article class="bout"><div class="row between"><small>{{'Places 3 et 4' if m.kind=='bronze' else 'Combat complémentaire' if m.kind=='odd' else 'Confrontation'}}</small><span class="pill {{m.state}}">{{m.state}}</span></div><div class="fighter-row {{'winner' if m.winner==m.a else ''}}"><span>{{names.get(m.a,'Participant')}}</span><b>{{m.sa}}</b></div><div class="fighter-row {{'winner' if m.winner==m.b else ''}}"><span>{{names.get(m.b,'Participant')}}</span><b>{{m.sb}}</b></div>{% if t.discipline=='Lutte' and m.state=='done' %}<small>Durée effective : {{'%.1f'|format(fight_time(m))}} s</small>{% endif %}{% if m.reason and m.reason!='points' %}<small>{{m.reason}}</small>{% endif %}</article>{% endfor %}</section>{% endfor %}</div>
+<div class="bracket">{% for turn,matches in t.matches|groupby('turn') %}<section class="round"><h3>Tour {{turn}}</h3>{% for m in matches %}<article class="bout"><div class="row between"><small>{{'Places 3 et 4' if m.kind=='bronze' else 'Dau complémentaire' if m.kind=='odd' else 'Confrontation'}}</small><span class="pill {{m.state}}">{{m.state}}</span></div><div class="fighter-row {{'winner' if m.winner==m.a else ''}}"><span>{{names.get(m.a,'Participant')}}</span><b>{{m.sa}}</b></div><div class="fighter-row {{'winner' if m.winner==m.b else ''}}"><span>{{names.get(m.b,'Participant')}}</span><b>{{m.sb}}</b></div>{% if t.discipline=='Vat' and m.state=='done' %}<small>Durée effective : {{'%.1f'|format(fight_time(m))}} s</small>{% endif %}{% if m.reason and m.reason!='points' %}<small>{{m.reason}}</small>{% endif %}</article>{% endfor %}</section>{% endfor %}</div>
 {% if t.places %}<div class="podium">{% for rank,pid in t.places.items() %}<div><strong>{{rank}}<sup>{{'er' if rank=='1' else 'e'}}</sup></strong> {{names.get(pid,'Participant')}}</div>{% endfor %}</div>{% endif %}
 {% endmacro %}
 {% macro ranking(c,rankings,clubs) %}
@@ -26,8 +26,8 @@
 <div class="clock" data-clock="{{m.timer|tojson|forceescape}}" {% if m.state in ['running','paused'] and m.timer and m.timer.duration!=none %}data-round-clock{% endif %}>—</div><p class="round-ended" data-round-ended role="status" hidden>Fin du round · saisie des scores</p><div class="clock-label">{% if m.state=='rest' %}Pause · prochain round lancé manuellement{% elif m.timer and m.timer.duration==none %}Mort subite{% elif m.rounds|length>=t.rounds %}Prolongation {{m.rounds|length-t.rounds+1}}{% else %}Round {{m.rounds|length+1}} / {{t.rounds}}{% endif %}</div>
 <div class="score-sides"><div class="red"><h2>{{names.get(m.a,'Participant')}}</h2><strong>{{m.sa}}</strong><small>ROUGE</small></div><span>VS</span><div class="blue"><h2>{{names.get(m.b,'Participant')}}</h2><strong>{{m.sb}}</strong><small>BLEU</small></div></div></div>{% endmacro %}
 {% macro tree(t,names) %}
-<section class="tree-section" id="arbre-{{t.id}}" aria-label="Arbre des combats">
-<div class="row between"><h2>Arbre des combats</h2><a href="#details-{{t.id}}">Voir la liste détaillée ↓</a></div>
+<section class="tree-section" id="arbre-{{t.id}}" aria-label="Arbre des daus">
+<div class="row between"><h2>Arbre des daus</h2><a href="#details-{{t.id}}">Voir la liste détaillée ↓</a></div>
 <p class="muted">Suivez les parcours de gauche à droite. Les tours suivants apparaissent après validation du tour en cours.</p>
 <div class="tree-legend"><span>━ Qualification</span><span>┄ Repêchage</span><span>━ Places 3 et 4</span><span>✓ Vainqueur</span></div>
 {% if t.matches %}
@@ -39,13 +39,13 @@
 <article class="tree-bout" data-bout="{{m.id}}" data-turn="{{m.turn}}" data-kind="{{m.kind}}" data-a="{{m.a}}" data-b="{{m.b}}" data-winner="{{m.winner or ''}}">
 <div class="tree-bout-title"><strong>{{'Places 3 et 4' if m.kind=='bronze' else 'Complément' if m.kind=='odd' else 'Tour '~m.turn}}</strong>{{status(m.state)}}</div>
 {% for side in ['a','b'] %}<div class="tree-fighter {{'winner' if m.winner==m[side] else ''}}" data-side="{{side}}"><span>{{names.get(m[side],'Participant')}}{% if m.winner==m[side] %} <b aria-label="Vainqueur">✓</b>{% endif %}</span><strong>{{m['s'~side]}}</strong></div>{% endfor %}
-{% if t.discipline=='Lutte' and m.state=='done' %}<small>Durée effective : {{'%.1f'|format(fight_time(m))}} s</small>{% endif %}{% if m.reason and m.reason!='points' %}<small>{{m.reason}}</small>{% endif %}
+{% if t.discipline=='Vat' and m.state=='done' %}<small>Durée effective : {{'%.1f'|format(fight_time(m))}} s</small>{% endif %}{% if m.reason and m.reason!='points' %}<small>{{m.reason}}</small>{% endif %}
 </article>
 {% endfor %}{% endfor %}{% endfor %}
 </div></div>
 <p class="muted tree-help">Sur téléphone ou tablette, faites glisser l’arbre horizontalement. Les liens pointillés suivent le perdant repêché.</p>
 {% else %}<div class="empty">L’arbre apparaîtra après le tirage au sort.</div>{% endif %}
-{% if t.spare %}<p class="hint">{{names.get(t.spare,'Participant')}} attend un combat complémentaire contre le meilleur perdant.</p>{% endif %}
+{% if t.spare %}<p class="hint">{{names.get(t.spare,'Participant')}} attend un dau complémentaire contre le meilleur perdant.</p>{% endif %}
 </section>
 {% endmacro %}
 

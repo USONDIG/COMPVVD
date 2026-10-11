@@ -12,6 +12,7 @@ from werkzeug.serving import make_server
 from app.web import create_app,connect
 from app import domain as d
 from tests.test_web import seed,TEST_PASSWORD
+from tests.test_import import file_bytes
 
 with tempfile.TemporaryDirectory() as tmp:
     app=create_app(dict(DATABASE=str(Path(tmp)/"browser.sqlite3"),SECRET_KEY="browser-test",SESSION_COOKIE_SECURE=False))
@@ -22,15 +23,17 @@ with tempfile.TemporaryDirectory() as tmp:
     t.update(area="aire",judges=["0","1","2"],referee="3",seconds=5)
     d.draw(c,t)
     for i,p in enumerate(list(c['people'])):
-        c['people'].append(dict(p,id=f'lutte-{i}',name=f'Lutte {i}',disciplines=['Lutte']))
-    c['areas'].append(dict(id='lutte-area',name='Aire Lutte',assistant='assistant2'))
-    c['officials'].append(dict(id='ref-lutte',name='Arbitre Lutte',qualification='Arbitre'))
-    d.generate(c,'Lutte')
+        c['people'].append(dict(p,id=f'vat-{i}',name=f'Vat {i}',disciplines=['Vat']))
+    c['areas'].append(dict(id='vat-area',name='Aire Vat',assistant='assistant2'))
+    c['officials'].append(dict(id='ref-vat',name='Arbitre Vat',qualification='Arbitre'))
+    d.generate(c,'Vat')
     lt=c['tables'][-1]
-    lt.update(area='lutte-area',judges=[],referee='ref-lutte',rounds=1,seconds=5,rest=2)
+    lt.update(area='vat-area',judges=[],referee='ref-vat',rounds=1,seconds=5,rest=2)
     d.draw(c,lt)
     with closing(connect(app.config["DATABASE"])) as db:
         db.execute("UPDATE competitions SET state=? WHERE id=?",(json.dumps(c),c["id"]))
+        registrations=d.new_competition('Inscriptions Excel','2026-11-01',2026,'organizer')
+        db.execute('INSERT INTO competitions VALUES(?,?,0)',(registrations['id'],json.dumps(registrations)))
         db.commit()
     server=make_server("127.0.0.1",0,app,threaded=True)
     thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
@@ -48,8 +51,8 @@ with tempfile.TemporaryDirectory() as tmp:
         page.wait_for_url(base+"/")
         page.goto(base+f'/c/{c["id"]}/table/{t["id"]}')
         page.get_by_role("button",name="Lancer le tableau").click()
-        page.get_by_role("button",name="Lancer le combat").wait_for()
-        page.get_by_role("button",name="Lancer le combat").click()
+        page.get_by_role("button",name="Lancer le dau").wait_for()
+        page.get_by_role("button",name="Lancer le dau").click()
         page.get_by_role("button",name="Suspendre le chronomètre").wait_for()
         assert page.locator('input[name="a0"]').count()==1
         page.locator('input[name="a0"]').fill("4")
@@ -94,7 +97,7 @@ with tempfile.TemporaryDirectory() as tmp:
         wrestler.wait_for_url(base+'/')
         wrestler.goto(base+f'/c/{c["id"]}/table/{lt["id"]}')
         wrestler.get_by_role('button',name='Lancer le tableau').click()
-        wrestler.get_by_role('button',name='Lancer le combat').click()
+        wrestler.get_by_role('button',name='Lancer le dau').click()
         wrestler.get_by_role('button',name='Suspendre le chronomètre').wait_for()
         expect(wrestler.locator('.clock')).not_to_have_class('clock clock-ended')
         validation=wrestler.get_by_role('button',name='Valider les scores du round')
@@ -102,10 +105,25 @@ with tempfile.TemporaryDirectory() as tmp:
         wrestler.locator('input[name="a0"]').fill('2')
         expect(validation).to_be_enabled(timeout=10000)
         expect(wrestler.locator('.clock')).to_have_class('clock clock-ended')
-        wrestler.screenshot(path='test-results/lutte-mobile.png',full_page=True)
+        wrestler.screenshot(path='test-results/vat-mobile.png',full_page=True)
         assert wrestler.evaluate('document.documentElement.scrollWidth <= innerWidth + 2')
         validation.click()
         wrestler.get_by_role('button',name='Valider le tour / clôturer').wait_for()
+        importer=browser.new_page(viewport={'width':1024,'height':768})
+        importer.on('pageerror',lambda err:errors.append(str(err)))
+        importer.goto(base+'/login')
+        importer.get_by_label('Identifiant').fill('club')
+        importer.get_by_label('Mot de passe',exact=True).fill(TEST_PASSWORD)
+        importer.get_by_role('button',name='Se connecter').click()
+        importer.wait_for_url(base+'/')
+        importer.goto(base+f'/c/{registrations["id"]}')
+        importer.get_by_role('link',name='Importer un fichier Excel').click()
+        importer.get_by_label('Fichier Excel').set_input_files({'name':'inscriptions.xlsx','mimeType':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','buffer':file_bytes([['Import Navigateur','12/04/2001','F',52,'Premier cap','Oui','','','','','']])})
+        importer.get_by_role('button',name='Prévisualiser et vérifier').click()
+        importer.get_by_role('button',name='Confirmer les 1 inscriptions').wait_for()
+        importer.screenshot(path='test-results/import-preview.png',full_page=True)
+        importer.get_by_role('button',name='Confirmer les 1 inscriptions').click()
+        importer.get_by_role('heading',name='1 inscription envoyée').wait_for()
         assert not errors,errors
         browser.close()
     server.shutdown()
