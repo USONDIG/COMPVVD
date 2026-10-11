@@ -31,3 +31,4 @@ jobs:
         with:
           name: browser-screenshots
           path: test-results/
+

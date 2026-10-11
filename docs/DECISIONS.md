@@ -14,3 +14,4 @@ Les réponses déjà données sont dans le cahier des charges. Ne pas reposer ce
 10. **Effectifs exclus et points de classement** : le forfait/abandon/disqualification exclut du repêchage, mais l’attribution de points pour une place obtenue avant exclusion mérite une règle explicite.
 
 Ces précisions ne bloquent pas la construction technique du premier parcours, mais doivent être traitées avant une utilisation réelle sur les cas concernés.
+

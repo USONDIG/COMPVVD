@@ -5,6 +5,7 @@ from pathlib import Path
 import secrets
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 from werkzeug.datastructures import MultiDict
 from app import domain as d
@@ -207,7 +208,7 @@ class WebTests(unittest.TestCase):
             self.assertEqual(r.status_code,200,r.data)
         act('generate',discipline='Lutte')
         c,_=self.stored(); t=c['tables'][0]; tid=t['id']
-        act('configure',table=tid,area='aire',referee='3')
+        act('configure',table=tid,area='aire',referee='3',rounds='1',seconds='30',rest='10')
         act('draw',table=tid)
         self.login('assistant2')
         _,rev=self.stored()
@@ -218,17 +219,20 @@ class WebTests(unittest.TestCase):
         act('start',table=tid,match=mid)
         page=self.client.get(f'/c/{c["id"]}/table/{tid}')
         self.assertEqual(page.status_code,200)
-        self.assertIn('Valider le point',page.text)
+        self.assertIn('Valider les scores du round',page.text)
         self.assertNotIn('Valider les six scores',page.text)
         c,rev=self.stored()
-        self.assertIsNone(c['tables'][0]['matches'][0]['timer']['duration'])
+        self.assertEqual(c['tables'][0]['matches'][0]['timer']['duration'],30)
         self.assertEqual(self.action('sudden',revision=rev,table=tid,match=mid).status_code,422)
-        act('lutte_point',table=tid,match=mid,winner=m['a'])
+        self.assertEqual(self.action('score',revision=rev,table=tid,match=mid,a0='2',b0='0').status_code,422)
+        with patch('app.domain.time.time',return_value=c['tables'][0]['matches'][0]['timer']['since']+31):
+            act('score',table=tid,match=mid,a0='2',b0='0')
         self.login('organizer')
-        act('correct',table=tid,match=mid,count='0',winner=m['b'],reason='points',duration='35.7')
+        act('correct',table=tid,match=mid,count='1',r0_0_0='0',r0_1_0='2',winner=m['b'],reason='points',duration='35.7')
         c,_=self.stored(); result=c['tables'][0]['matches'][0]
         self.assertEqual(result['winner'],m['b'])
         self.assertEqual(result['timer']['elapsed'],35.7)
         act('advance',table=tid)
         c,_=self.stored()
         self.assertEqual(c['tables'][0]['status'],'closed')
+
