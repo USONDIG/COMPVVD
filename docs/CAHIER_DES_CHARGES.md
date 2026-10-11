@@ -81,7 +81,7 @@ Les deux perdants des demi-finales s’affrontent pour les places 3 et 4. La 5e 
 ## 5. Lutte
 Élimination directe et fonctionnement des tableaux comparable au Combat individuel.
 
-Le vainqueur est **le premier à marquer un point, sans limite de temps**. **L’arbitre central seul valide le point gagnant ; il n’y a pas de juges d’aire en Lutte.** La décision est saisie par l’assistant.
+Mise à jour du 11 octobre 2026 : la Lutte utilise les mêmes rounds que le Combat (nombre, durée et pauses configurables, départ manuel, cumul des scores). L’arbitre central seul annonce les scores, saisis par l’assistant en fin de round. En cas d’égalité : deux prolongations de 15 secondes, puis premier point en mort subite sans limite de temps.
 
 Critères de repêchage et de meilleure 5e place :
 1. Perdant ayant combattu le plus longtemps.
@@ -89,7 +89,7 @@ Critères de repêchage et de meilleure 5e place :
 3. Plus jeune.
 4. Tirage au sort si égalité complète.
 
-Le chronomètre mesure la durée réellement combattue : les interruptions sont exclues. Combat de classement pour les places 3 et 4. Les durées et rounds initialement évoqués pour toutes les confrontations ne s’appliquent donc pas à la Lutte sans limite.
+Le chronomètre mesure la durée réellement combattue : les interruptions sont exclues. Combat de classement pour les places 3 et 4. Le temps effectif cumule les rounds et prolongations, hors pauses, interruptions et délai de saisie après la fin du round.
 
 ## 6. Kata, Kata Arme et Kata synchro
 Mêmes règles de notation pour ces trois disciplines.
@@ -195,3 +195,4 @@ Exports :
 Application hébergée sur le Web. Pas d’ordinateur serveur obligatoire dans la salle. Les postes utilisent le Wi-Fi avec accès Internet. Le besoin initial de fonctionnement sans Internet a été remplacé par la demande explicite d’application hébergée.
 
 Les mots de passe, dates de naissance et données d’inscription ne doivent pas être publiés dans les dépôts, journaux publics ou vues spectateurs.
+

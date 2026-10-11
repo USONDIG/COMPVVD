@@ -27,7 +27,7 @@ with tempfile.TemporaryDirectory() as tmp:
     c['officials'].append(dict(id='ref-lutte',name='Arbitre Lutte',qualification='Arbitre'))
     d.generate(c,'Lutte')
     lt=c['tables'][-1]
-    lt.update(area='lutte-area',judges=[],referee='ref-lutte')
+    lt.update(area='lutte-area',judges=[],referee='ref-lutte',rounds=1,seconds=5,rest=2)
     d.draw(c,lt)
     with closing(connect(app.config["DATABASE"])) as db:
         db.execute("UPDATE competitions SET state=? WHERE id=?",(json.dumps(c),c["id"]))
@@ -97,12 +97,17 @@ with tempfile.TemporaryDirectory() as tmp:
         wrestler.get_by_role('button',name='Lancer le combat').click()
         wrestler.get_by_role('button',name='Suspendre le chronomètre').wait_for()
         expect(wrestler.locator('.clock')).not_to_have_class('clock clock-ended')
-        wrestler.locator('form:has(input[name="action"][value="lutte_point"]) select[name="winner"]').select_option(lt['matches'][0]['a'])
+        validation=wrestler.get_by_role('button',name='Valider les scores du round')
+        expect(validation).to_be_disabled()
+        wrestler.locator('input[name="a0"]').fill('2')
+        expect(validation).to_be_enabled(timeout=10000)
+        expect(wrestler.locator('.clock')).to_have_class('clock clock-ended')
         wrestler.screenshot(path='test-results/lutte-mobile.png',full_page=True)
         assert wrestler.evaluate('document.documentElement.scrollWidth <= innerWidth + 2')
-        wrestler.get_by_role('button',name='Valider le point et terminer le combat').click()
+        validation.click()
         wrestler.get_by_role('button',name='Valider le tour / clôturer').wait_for()
         assert not errors,errors
         browser.close()
     server.shutdown()
 print("Parcours navigateur desktop/mobile/tablette validé.")
+

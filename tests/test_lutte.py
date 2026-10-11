@@ -8,13 +8,14 @@ def setup(n=8):
     c['tables']=[]
     for p in c['people']:p['disciplines']=['Combat','Lutte']
     d.generate(c,'Lutte');t=c['tables'][0]
-    t.update(area='area',referee='3',judges=[])
+    t.update(area='area',referee='3',judges=[],rounds=1,seconds=30,rest=10)
     d.draw(c,t);d.start_table(c,t)
     return c,t
 
 def result(c,t,m,seconds=30):
+    t['seconds']=seconds
     with patch('app.domain.time.time',return_value=100):d.start_round(c,t,m)
-    with patch('app.domain.time.time',return_value=100+seconds):d.lutte_point(t,m,m['a'])
+    with patch('app.domain.time.time',return_value=100+seconds):d.score(t,m,[[1],[0]])
 
 class LutteTests(unittest.TestCase):
     def test_separate_generation(self):
@@ -22,17 +23,37 @@ class LutteTests(unittest.TestCase):
         self.assertEqual({x['discipline'] for x in c['tables']},{'Combat','Lutte'})
         with self.assertRaises(d.RuleError):d.generate(c,'Lutte')
 
-    def test_timer_excludes_pause_and_first_point_closes(self):
-        c,t=setup(2);m=t['matches'][0]
+    def test_rounds_pause_and_effective_time(self):
+        c,t=setup(2);t.update(rounds=2,seconds=20,rest=10);m=t['matches'][0]
         with patch('app.domain.time.time',return_value=100):d.start_round(c,t,m)
-        self.assertIsNone(m['timer']['duration'])
-        with patch('app.domain.time.time',return_value=110):d.pause(m)
+        with patch('app.domain.time.time',return_value=110):
+            with self.assertRaises(d.RuleError):d.score(t,m,[[2],[0]])
+            with self.assertRaises(d.RuleError):d.lutte_point(t,m,m['a'])
+            d.pause(m)
         with patch('app.domain.time.time',return_value=200):d.pause(m)
-        with patch('app.domain.time.time',return_value=215):d.lutte_point(t,m,m['b'])
-        self.assertEqual(m['timer']['elapsed'],25)
-        self.assertEqual((m['sa'],m['sb'],m['winner']),(0,1,m['b']))
-        with self.assertRaises(d.RuleError):d.lutte_point(t,m,m['a'])
-        d.advance(c,t);self.assertEqual(t['places']['1'],m['b'])
+        with patch('app.domain.time.time',return_value=250):d.score(t,m,[[2],[0]])
+        self.assertEqual(d.fight_time(m),20)
+        self.assertEqual(m['state'],'rest')
+        with patch('app.domain.time.time',return_value=255):
+            with self.assertRaises(d.RuleError):d.start_round(c,t,m)
+        with patch('app.domain.time.time',return_value=300):d.start_round(c,t,m)
+        with patch('app.domain.time.time',return_value=320):d.score(t,m,[[1],[2]])
+        self.assertEqual((m['sa'],m['sb'],m['winner']),(3,2,m['a']))
+        self.assertEqual(d.fight_time(m),40)
+
+    def test_two_extensions_then_referee_sudden_death(self):
+        c,t=setup(2);m=t['matches'][0]
+        now=100
+        for duration in (30,15,15):
+            with patch('app.domain.time.time',return_value=now):d.start_round(c,t,m)
+            self.assertEqual(m['timer']['duration'],duration)
+            with patch('app.domain.time.time',return_value=now+duration):d.score(t,m,[[1],[1]])
+            now+=duration+10
+        with patch('app.domain.time.time',return_value=now):d.start_round(c,t,m)
+        self.assertIsNone(m['timer']['duration'])
+        with patch('app.domain.time.time',return_value=now+7):d.lutte_point(t,m,m['b'])
+        self.assertEqual((m['sa'],m['sb']),(3,4))
+        self.assertEqual(d.fight_time(m),67)
 
     def test_longest_loser_repechage(self):
         c,t=setup(7)
@@ -68,8 +89,8 @@ class LutteTests(unittest.TestCase):
     def test_correction_duration_and_winner(self):
         c,t=setup(2);m=t['matches'][0];result(c,t,m)
         d.advance(c,t)
-        d.correct(t,m,[],m['b'],'points',duration=42.5)
-        self.assertEqual(m['timer']['elapsed'],42.5)
+        d.correct(t,m,[[[0],[1]]],m['b'],'points',duration=42.5)
+        self.assertEqual(d.fight_time(m),42.5)
         self.assertEqual((m['sa'],m['sb']),(0,1))
         d.advance(c,t);self.assertEqual(t['places']['1'],m['b'])
         with self.assertRaises(d.RuleError):d.correct(t,m,[],m['a'],'points',duration=float('nan'))
@@ -77,3 +98,4 @@ class LutteTests(unittest.TestCase):
     def test_combat_scores_not_allowed(self):
         c,t=setup(2);m=t['matches'][0];d.start_round(c,t,m)
         with self.assertRaises(d.RuleError):d.score(t,m,[[1,0,0],[0,0,0]])
+

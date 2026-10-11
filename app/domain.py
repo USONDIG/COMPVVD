@@ -97,13 +97,14 @@ def best_loser(c, matches, excluded=(), discipline="Combat"):
     people = {p["id"]:p for p in c["people"]}
     def key(m):
         p = people[m["loser"]]
-        criterion = -elapsed(m["timer"]) if discipline=="Lutte" else abs(m["sa"]-m["sb"])
+        criterion = -fight_time(m) if discipline=="Lutte" else abs(m["sa"]-m["sb"])
         return criterion, p["grade"], -date.fromisoformat(p["birth"]).toordinal()
     best = min(map(key, eligible))
     return secrets.choice([m["loser"] for m in eligible if key(m) == best])
 
 def start_table(c, t):
     require(t["status"] == "ready", "Le tableau doit être prêt.")
+    require(t["seconds"] > 0, "Configurez la durée des rounds avant de lancer ce tableau.")
     area = next((a for a in c["areas"] if a["id"] == t["area"]), None)
     require(area and area["assistant"], "Affectez une aire et un assistant.")
     require(t["referee"] and (not t["judges"] if t["discipline"]=="Lutte" else len(t["judges"])==3), "Affectez l’arbitre central et les juges requis par la discipline.")
@@ -158,6 +159,19 @@ def elapsed(timer, now=None):
         return 0
     return timer["elapsed"] + (max(0,(time.time() if now is None else now)-timer["since"]) if timer["running"] else 0)
 
+def fight_time(m):
+    if "fight_elapsed" in m:
+        return m["fight_elapsed"]
+    return elapsed(m.get("timer"))
+
+def bank_time(m):
+    timer=m.get("timer")
+    if timer and m["state"] in ("running","paused"):
+        seconds=elapsed(timer)
+        if timer["duration"] is not None:
+            seconds=min(seconds,timer["duration"])
+        m["fight_elapsed"]=m.get("fight_elapsed",0)+seconds
+
 def start_round(c, t, m):
     require(t["status"] == "active" and m["state"] in ("pending","rest"), "Combat non disponible.")
     for other in c["tables"]:
@@ -168,7 +182,8 @@ def start_round(c, t, m):
     if m["state"] == "rest":
         require(elapsed(m["timer"]) >= m["timer"]["duration"], "La pause n’est pas terminée.")
     n = len(m["rounds"])
-    duration = None if t["discipline"]=="Lutte" else t["seconds"] if n < t["rounds"] else (15 if n < t["rounds"]+2 else None)
+    require(t["seconds"] > 0, "Configurez la durée des rounds avant de lancer ce tableau.")
+    duration = t["seconds"] if n < t["rounds"] else (15 if n < t["rounds"]+2 else None)
     m.update(state="running", timer=dict(running=True, since=time.time(), elapsed=0, duration=duration))
 
 def pause(m):
@@ -181,6 +196,7 @@ def pause(m):
 
 def finish(m, winner, reason):
     require(winner in (m["a"],m["b"]), "Vainqueur invalide.")
+    bank_time(m)
     if m["timer"]:
         m["timer"]["elapsed"] = elapsed(m["timer"])
         m["timer"]["running"] = False
@@ -188,30 +204,33 @@ def finish(m, winner, reason):
 
 def lutte_point(t, m, winner):
     require(t["discipline"]=="Lutte" and t["status"]=="active", "Tableau Lutte actif requis.")
-    require(m["state"] in ("running","paused"), "Lancez le combat avant la décision.")
+    require(m["state"] in ("running","paused") and m["timer"]["duration"] is None,
+            "Le premier point ne termine que la mort subite.")
+    require(len(m["rounds"])>=t["rounds"]+2, "Les rounds et prolongations doivent être terminés.")
     require(winner in (m["a"],m["b"]), "Vainqueur invalide.")
-    m.update(sa=1 if winner==m["a"] else 0, sb=1 if winner==m["b"] else 0)
+    m["sa" if winner==m["a"] else "sb"]+=1
+    m["votes"]=["a" if winner==m["a"] else "b"]
     finish(m,winner,"points")
 
-def validate_scores(scores):
-    require(isinstance(scores,list) and len(scores)==2 and all(isinstance(s,list) and len(s)==3 for s in scores),
-            "Six scores sont requis.")
+def validate_scores(scores, count=3):
+    require(isinstance(scores,list) and len(scores)==2 and all(isinstance(s,list) and len(s)==count for s in scores),
+            "Nombre de scores invalide.")
     for side in scores:
         for v in side:
             integer(v,0,999,"Score")
 
 def score(t, m, scores):
-    require(t["discipline"]=="Combat", "La Lutte se termine sur décision de l’arbitre central.")
     require(m["state"] in ("running","paused"), "Lancez le round avant la saisie.")
     require(m["timer"]["duration"] is not None, "Saisissez les votes de mort subite.")
     require(elapsed(m["timer"]) >= m["timer"]["duration"], "Le round n’est pas terminé.")
-    validate_scores(scores)
+    validate_scores(scores,1 if t["discipline"]=="Lutte" else 3)
     m["rounds"].append(scores)
     m["sa"] += sum(scores[0])
     m["sb"] += sum(scores[1])
     if len(m["rounds"]) >= t["rounds"] and m["sa"] != m["sb"]:
         finish(m, m["a"] if m["sa"]>m["sb"] else m["b"], "points")
     else:
+        bank_time(m)
         m.update(state="rest", timer=dict(running=True,since=time.time(),elapsed=0,duration=t["rest"]))
 
 def sudden(m, votes):
@@ -232,21 +251,20 @@ def correct(t, m, rounds, winner, reason, votes=None, duration=None):
     require(isinstance(rounds,list) and len(rounds)<=22, "Liste de rounds invalide.")
     require(reason in ("points","forfait","abandon","disqualification"), "Décision invalide.")
     for r in rounds:
-        validate_scores(r)
+        validate_scores(r,1 if t["discipline"]=="Lutte" else 3)
     sa, sb = sum(sum(r[0]) for r in rounds), sum(sum(r[1]) for r in rounds)
     if t["discipline"]=="Lutte":
         require(type(duration) in (int,float) and math.isfinite(duration) and duration>=0, "Durée effective invalide.")
-        require(winner in (m["a"],m["b"]) and not rounds, "Décision Lutte invalide.")
-        sa, sb = (int(winner==m["a"]), int(winner==m["b"])) if reason=="points" else (0,0)
-        votes=None
-    elif reason=="points":
+    if reason=="points":
+        require(t["discipline"]!="Lutte" or len(rounds)>=t["rounds"], "Tous les rounds réglementaires sont requis.")
         if sa==sb:
-            require(votes and len(votes)==3 and votes.count("a" if winner==m["a"] else "b")>=2,
-                    "Une égalité nécessite les votes de mort subite.")
-            if winner==m["a"]:
-                sa += 1
-            else:
-                sb += 1
+            needed=1 if t["discipline"]=="Lutte" else 2
+            count=1 if t["discipline"]=="Lutte" else 3
+            require((t["discipline"]!="Lutte" or len(rounds)>=t["rounds"]+2) and votes and len(votes)==count and
+                    votes.count("a" if winner==m["a"] else "b")>=needed,
+                    "Une égalité nécessite la décision de mort subite après les prolongations.")
+            if winner==m["a"]: sa+=1
+            else: sb+=1
         require(winner==(m["a"] if sa>sb else m["b"]), "Vainqueur incompatible avec les scores.")
     for x in dependents:
         if x["kind"]=="odd":
@@ -256,6 +274,7 @@ def correct(t, m, rounds, winner, reason, votes=None, duration=None):
     t.update(turn=m["turn"],status="active",closed=None,places={})
     m.update(rounds=rounds,sa=sa,sb=sb,votes=votes)
     if t["discipline"]=="Lutte":
+        m["fight_elapsed"]=duration
         m["timer"]=dict(elapsed=duration,since=time.time(),running=False,duration=None)
     finish(m,winner,reason)
 
@@ -291,3 +310,4 @@ def rankings(c):
         groups["Clubs"].append(dict(id=club,points=pts,rank=rank))
         previous=pts
     return groups
+

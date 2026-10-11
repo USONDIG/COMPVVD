@@ -39,7 +39,7 @@ Statut : développement en cours, non livré.
 - Vérifier les sauvegardes, le redémarrage et la protection des pages publiques.
 
 ## Lot 2 — Lutte
-Chronomètre sans limite et arrêté sur interruptions, point validé par l’arbitre central, repêchage sur durée réellement combattue et classement.
+Rounds, pauses et prolongations comme en Combat ; scores de l’arbitre central, repêchage sur durée effective cumulée et classement.
 
 ## Lot 3 — Katas
 Kata, Kata Arme, notes au dixième, deux modes selon effectif, égalités à la qualification et au classement final, passages indépendants de départage.
@@ -51,3 +51,4 @@ Constitution par l’organisateur, équipes multiclubs, Kata synchro par groupe 
 Compétition fictive complète, postes simultanés, écran public, sauvegarde/restauration, validation avec officiels et assistants.
 
 Le dépôt GitHub et l’hébergement de l’application sont deux livraisons distinctes. Aucun hébergement public n’a encore été configuré.
+

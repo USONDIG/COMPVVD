@@ -186,9 +186,9 @@ def mutate(c,action,data):
             for official in judges+[referee]:
                 find(c["officials"],official)
             t.update(area=data["area"],judges=judges,referee=referee,
-                     rounds=1 if t["discipline"]=="Lutte" else d.integer(int(data["rounds"]),1,20,"Rounds"),
-                     seconds=0 if t["discipline"]=="Lutte" else d.integer(int(data["seconds"]),1,1800,"Durée"),
-                     rest=0 if t["discipline"]=="Lutte" else d.integer(int(data["rest"]),0,600,"Pause"))
+                     rounds=d.integer(int(data["rounds"]),1,20,"Rounds"),
+                     seconds=d.integer(int(data["seconds"]),1,1800,"Durée"),
+                     rest=d.integer(int(data["rest"]),0,600,"Pause"))
         elif action=="draw":
             d.draw(c,t)
         elif action=="start_table":
@@ -202,7 +202,7 @@ def mutate(c,action,data):
             if action=="correct":
                 d.require(not any(x["id"]!=t["id"] and x["status"]=="active" and x["area"]==t["area"] for x in c["tables"]),"Cette aire accueille un autre tableau.")
                 count=d.integer(int(data["count"]),0,22,"Nombre de rounds")
-                scores=[[[int(data[f"r{i}_{s}_{j}"]) for j in range(3)] for s in range(2)] for i in range(count)]
+                scores=[[[int(data[f"r{i}_{s}_{j}"]) for j in range(1 if t["discipline"]=="Lutte" else 3)] for s in range(2)] for i in range(count)]
                 d.correct(t,m,scores,data.get("winner"),data.get("reason"),data.getlist("votes"),float(data.get("duration","0")) if t["discipline"]=="Lutte" else None)
                 return
             d.require(t["status"]=="active","Le tableau n’est pas en cours.")
@@ -211,7 +211,7 @@ def mutate(c,action,data):
             elif action=="pause":
                 d.pause(m)
             elif action=="score":
-                scores=[[int(data[f"{s}{j}"]) for j in range(3)] for s in ("a","b")]
+                scores=[[int(data[f"{s}{j}"]) for j in range(1 if t["discipline"]=="Lutte" else 3)] for s in ("a","b")]
                 d.score(t,m,scores)
             elif action=="lutte_point":
                 d.lutte_point(t,m,data.get("winner"))
@@ -336,7 +336,7 @@ def create_app(config=None):
 
     @app.context_processor
     def context():
-        return dict(csrf=session.get("csrf",""),user=g.user,grades=d.GRADES,disciplines=d.DISCIPLINES,ages=d.AGES,
+        return dict(csrf=session.get("csrf",""),user=g.user,grades=d.GRADES,disciplines=d.DISCIPLINES,ages=d.AGES,fight_time=d.fight_time,
                     labels={"draft":"À préparer","ready":"Prêt","active":"En cours","closed":"Clôturé","pending":"En attente","approved":"Approuvé","rejected":"Refusé","running":"En cours","paused":"Suspendu","rest":"Pause","done":"Terminé"},
                     roles={"admin":"Administrateur","organizer":"Organisateur","club":"Responsable de club","assistant":"Assistant de table"},
                     now=time.time())
@@ -548,3 +548,4 @@ def create_app(config=None):
         click.echo("Sauvegarde SQLite cohérente créée.")
 
     return app
+
