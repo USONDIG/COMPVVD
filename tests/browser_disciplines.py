@@ -54,7 +54,8 @@ with tempfile.TemporaryDirectory() as tmp:
                         page.screenshot(path='test-results/quyen-mobile.png',full_page=True)
                         assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2')
                     page.get_by_role('button',name='Valider les trois notes',exact=True).click()
-                page.get_by_role('button',name='Valider le tour / calculer la suite',exact=True).click()
+                with page.expect_navigation():
+                    page.get_by_role('button',name='Valider le tour / calculer la suite',exact=True).click()
             page.wait_for_function("document.querySelector('input[value=quyen_start]') || [...document.querySelectorAll('h3')].some(x=>x.textContent==='Classement final')")
             # First-round draw order can differ from second-round order, creating a tie.
             for _ in range(2):
@@ -63,7 +64,8 @@ with tempfile.TemporaryDirectory() as tmp:
                     page.get_by_role('button',name='Lancer le passage',exact=True).first.click()
                     for field in page.locator('form:has(input[value="quyen_score"]) input[name="notes"]').all():field.fill(str(7+i))
                     page.get_by_role('button',name='Valider les trois notes',exact=True).click()
-                page.get_by_role('button',name='Valider le tour / calculer la suite',exact=True).click()
+                with page.expect_navigation():
+                    page.get_by_role('button',name='Valider le tour / calculer la suite',exact=True).click()
             page.get_by_role('heading',name='Classement final',exact=True).wait_for()
         page.goto(base+f'/c/{c["id"]}/table/{pool["id"]}')
         page.get_by_role('button',name='Lancer le tableau').click();page.get_by_role('button',name='Lancer la rencontre',exact=True).click()
