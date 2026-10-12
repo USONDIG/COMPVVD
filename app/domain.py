@@ -33,6 +33,7 @@ def integer(v, low, high, label):
 LEGACY_DISCIPLINES = {"Combat":"Dau", "Lutte":"Vat", "Kata":"Quyen", "Kata Arme":"Quyen Arme", "Combat équipe":"Dau équipe", "Kata synchro":"Quyen synchro"}
 
 def normalize_competition(c):
+    c.setdefault("teams",[])
     c["open"]=[LEGACY_DISCIPLINES.get(x,x) for x in c["open"]]
     for p in c["people"]:
         p["disciplines"]=[LEGACY_DISCIPLINES.get(x,x) for x in p["disciplines"]]
@@ -44,7 +45,7 @@ def new_competition(name, day, season, owner):
     date.fromisoformat(day)
     integer(season, 2020, 2100, "Saison")
     return dict(id=uid(), name=name, date=day, season=season, owner=owner, code=secrets.token_hex(6).upper(),
-                open=["Dau"], weights=copy.deepcopy(WEIGHTS), people=[], areas=[], officials=[], tables=[])
+                open=["Dau"], weights=copy.deepcopy(WEIGHTS), people=[], areas=[], officials=[], tables=[], teams=[])
 
 def age_index(p, c):
     age = c["season"] - date.fromisoformat(p["birth"]).year
@@ -81,6 +82,8 @@ def match(a, b, turn, kind="main"):
                 sa=0, sb=0, winner=None, loser=None, reason=None, votes=None, timer=None)
 
 def generate(c, discipline="Dau"):
+    if discipline in extra.QUYEN+("Dau équipe",):
+        return extra.generate(c,discipline)
     require(discipline in ("Dau","Vat"), "Discipline non disponible.")
     require(not any(t["discipline"]==discipline for t in c["tables"]), "Les tableaux ont déjà été générés.")
     require(discipline not in c["open"], "Fermez d’abord les inscriptions "+discipline+".")
@@ -95,6 +98,8 @@ def generate(c, discipline="Dau"):
             rest=30, started=None, closed=None, places={}, repechages=[]))
 
 def draw(c, t):
+    if t["discipline"] in extra.QUYEN+("Dau équipe",):
+        return extra.draw(c,t)
     require(t["status"] == "draft", "Le tirage est définitif.")
     require(len(t["members"]) >= 2, "Fusionnez cette catégorie avant le tirage.")
     pairs, spare = pair(t["members"], {p["id"]:p for p in c["people"]})
@@ -117,16 +122,20 @@ def start_table(c, t):
     require(t["seconds"] > 0, "Configurez la durée des rounds avant de lancer ce tableau.")
     area = next((a for a in c["areas"] if a["id"] == t["area"]), None)
     require(area and area["assistant"], "Affectez une aire et un assistant.")
-    require(t["referee"] and (not t["judges"] if t["discipline"]=="Vat" else len(t["judges"])==3), "Affectez l’arbitre central et les juges requis par la discipline.")
+    require((len(set(t["judges"]))==3 and not t["referee"]) if t["discipline"] in extra.QUYEN else t["referee"] and (not t["judges"] if t["discipline"]=="Vat" else len(set(t["judges"]+[t["referee"]]))==4), "Affectez l’arbitre central et les juges requis par la discipline.")
     for other in c["tables"]:
         if other["status"] != "active":
             continue
         require(other["area"] != t["area"], "Cette aire accueille déjà un tableau.")
-        require(not (set(t["judges"]+[t["referee"]]) & set(other["judges"]+[other["referee"]])),
+        require(not (set(filter(None,t["judges"]+[t["referee"]])) & set(filter(None,other["judges"]+[other["referee"]]))),
                 "Un officiel est déjà affecté à un tableau en cours.")
     t.update(status="active", started=time.time())
 
 def advance(c, t):
+    if t["discipline"] in extra.QUYEN:
+        return extra.quyen_advance(t)
+    if t["discipline"]=="Dau équipe":
+        return extra.pool_advance(c,t)
     require(t["status"] == "active", "Le tableau doit être en cours.")
     current = [m for m in t["matches"] if m["turn"] == t["turn"] and m["kind"] != "bronze"]
     require(current and all(m["state"] == "done" for m in current), "Terminez les daus du tour.")
@@ -184,11 +193,9 @@ def bank_time(m):
 
 def start_round(c, t, m):
     require(t["status"] == "active" and m["state"] in ("pending","rest"), "Dau non disponible.")
-    for other in c["tables"]:
-        for bout in other["matches"]:
-            if bout["id"] != m["id"] and bout["state"] in ("running","paused","rest","correction"):
-                require(other["area"] != t["area"], "Un dau est déjà engagé sur cette aire.")
-                require(not ({m["a"],m["b"]} & {bout["a"],bout["b"]}), "Un participant est engagé sur une autre aire.")
+    if t["discipline"]=="Dau équipe":
+        require(m.get("encounter")==t.get("active_encounter") and t.get("active_encounter"), "Lancez d’abord la rencontre de cette confrontation.")
+    extra.available(c,t,[m["a"],m["b"]],m["id"])
     if m["state"] == "rest":
         require(elapsed(m["timer"]) >= m["timer"]["duration"], "La pause n’est pas terminée.")
     n = len(m["rounds"])
@@ -321,3 +328,5 @@ def rankings(c):
         previous=pts
     return groups
 
+
+from . import disciplines as extra

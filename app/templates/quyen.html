@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% from "macros.html" import field,post,status with context %}{% from "discipline_macros.html" import quyen_results,quyen_board with context %}
+{% block content %}{% set names=entry_names(c) %}
+<div class="row between no-print"><a href="/c/{{c.id}}#tableaux">← {{c.name}}</a><button class="secondary" data-print>Imprimer / PDF</button></div><br><div class="eyebrow">{{area.get('name','Aire à affecter')}} · {{t.discipline}}</div><div class="row between"><h1>{{t.name}}</h1>{{status(t.status)}}</div>
+<p class="hint">Trois notes de 6,0 à 10,0 au dixième. {% if t.members|length>5 %}Les cinq meilleurs du premier tour sont qualifiés. Seules les notes du second tour comptent pour le classement final.{% else %}Tous les inscrits effectuent deux tours. Le classement additionne les notes des deux tours.{% endif %} Les égalités nécessaires sont départagées par un nouveau passage indépendant.</p>
+{% if t.discipline=='Quyen synchro' %}<p class="muted">Équipes de 2 à 6 · aucune contribution aux classements individuels ou par club.</p>{% endif %}
+{% if t.started %}<p>Durée du tableau : <strong data-duration="{{t.started}}" data-closed="{{t.closed or ''}}">—</strong></p>{% endif %}
+<p>Juges : {% for id in t.judges %}{{officials.get(id)}}{{', ' if not loop.last else ''}}{% else %}À affecter{% endfor %}</p>
+{% if t.status=='draft' %}<section class="panel"><h2>Participants / équipes</h2>{% for pid in t.members %}<p>{{names.get(pid)}}</p>{% endfor %}<p>Effectuez le tirage depuis la préparation des tableaux.</p></section>{% endif %}
+{% if t.status=='ready' %}{% call post(c,'start_table',t) %}<button>Lancer le tableau</button>{% endcall %}{% endif %}
+{% if t.status=='active' %}<div data-live class="no-print">{{quyen_board(t,names,area.get('name','Aire'))}}<section class="panel"><h2>Table de notation</h2>
+{% set current=t.passes|selectattr('wave','equalto',t.wave)|list %}{% set remaining=current|rejectattr('state','equalto','done')|list %}{% set engaged=remaining|selectattr('state','in',['running','paused'])|list %}
+{% if engaged %}{% set p=engaged[0] %}
+{% call post(c,'quyen_pause',t,p) %}<button class="secondary">{{'Reprendre' if p.state=='paused' else 'Suspendre'}} le chronomètre</button>{% endcall %}
+{% call post(c,'quyen_score',t,p,confirm='Valider les trois notes de ce passage ?') %}<h3>{{names.get(p.entry)}}</h3><div class="grid3">{% for j in range(3) %}{{field('Juge '~(j+1)~' · '~officials.get(t.judges[j],''),'notes','number',min=6,max=10,step='0.1')}}{% endfor %}</div><button>Valider les trois notes</button>{% endcall %}
+{% elif remaining %}<p>Choisissez le passage à lancer ; l’ordre initial a été tiré au sort.</p>{% for p in remaining %}{% call post(c,'quyen_start',t,p) %}<div class="row between"><span>{{names.get(p.entry)}}</span><button>Lancer le passage</button></div>{% endcall %}{% endfor %}
+{% else %}<p>Tous les passages de cette série sont notés.</p>{% call post(c,'advance',t,confirm='Valider le tour et calculer les qualifications, départages ou le classement ?') %}<button>Valider le tour / calculer la suite</button>{% endcall %}{% endif %}</section></div>{% endif %}
+<section class="panel">{{quyen_results(t,names)}}</section>
+{% if manager %}<details class="panel no-print"><summary>Corriger les notes d’un passage</summary><p>Les corrections sont journalisées et bloquées dès qu’un passage d’une série suivante a commencé.</p>{% for p in t.get('passes',[]) if p.state=='done' %}<details><summary>{{names.get(p.entry)}} · série {{p.wave}} · {{'%.1f'|format(p.total/10)}}</summary>{% call post(c,'quyen_correct',t,p,confirm='Corriger les trois notes et recalculer les séries suivantes non commencées ?') %}<div class="grid3">{% for n in p.notes %}{{field('Juge '~loop.index,'notes','number',n/10,min=6,max=10,step='0.1')}}{% endfor %}</div><button>Enregistrer la correction</button>{% endcall %}</details>{% endfor %}</details>{% endif %}
+{% endblock %}

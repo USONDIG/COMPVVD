@@ -14,3 +14,9 @@ Les réponses déjà données sont dans le cahier des charges. Ne pas reposer ce
 10. **Effectifs exclus et points de classement** : le forfait/abandon/disqualification exclut du repêchage, mais l’attribution de points pour une place obtenue avant exclusion mérite une règle explicite.
 
 Ces précisions ne bloquent pas la construction technique du premier parcours, mais doivent être traitées avant une utilisation réelle sur les cas concernés.
+
+## Choix provisoires des disciplines collectives
+
+- Pour toute égalité de trois équipes ou plus en Dau équipe : combats gagnés, puis points cumulés, puis ex æquo ; pas de retour à la confrontation directe entre sous-groupes.
+- L’âge senior continue d’être calculé par année de saison comme les catégories individuelles.
+- Le traitement d’un forfait, d’une absence ou d’une disqualification en Quyen n’est pas défini. Aucune note fictive n’est attribuée automatiquement ; ce cas doit être arbitré avant utilisation réelle.
