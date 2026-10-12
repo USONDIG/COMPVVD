@@ -230,7 +230,7 @@ def mutate(c,action,data):
         else:
             m=find(t["matches"],data.get("match"))
             if action=="correct":
-                d.require(not any(x["id"]!=t["id"] and x["status"]=="active" and x["area"]==t["area"] for x in c["tables"]),"Cette aire accueille un autre tableau.")
+                d.require(not any(x["id"]!=t["id"] and x["status"]=="active" and (x["area"]==t["area"] or set(filter(None,x["judges"]+[x["referee"]])) & set(filter(None,t["judges"]+[t["referee"]]))) for x in c["tables"]),"Aire ou officiels déjà engagés sur un autre tableau.")
                 count=d.integer(int(data["count"]),0,22,"Nombre de rounds")
                 scores=[[[int(data[f"r{i}_{s}_{j}"]) for j in range(1 if t["discipline"]=="Vat" else 3)] for s in range(2)] for i in range(count)]
                 if t["discipline"]=="Dau équipe":

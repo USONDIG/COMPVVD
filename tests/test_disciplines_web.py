@@ -82,3 +82,14 @@ class DisciplineWebTests(unittest.TestCase):
         for team in c['teams'][:2]:team['group']='Moins de 18 ans'
         d.generate(c,'Quyen synchro');self.save(c);self.login('organizer')
         a,b=c['tables'];self.assertEqual(self.action('merge',source=a['id'],target=b['id']).status_code,422)
+
+    def test_team_correction_cannot_reopen_with_busy_officials(self):
+        c=self.c;source=teams((3,3));c['people']=source['people'];c['teams']=source['teams'];c['open']=[]
+        d.generate(c,'Dau équipe');t=c['tables'][0];t.update(area='aire',judges=['0','1','2'],referee='3')
+        d.draw(c,t);d.start_table(c,t);x.pool_start(c,t,t['encounters'][0]['id'])
+        for m in t['matches']:d.finish(m,m['a'],'forfait')
+        d.advance(c,t)
+        c['tables'].append(dict(id='other',discipline='Dau',members=[],matches=[],places={},status='active',area='elsewhere',judges=['0','other1','other2'],referee='other3'))
+        self.save(c);self.login('organizer');m=t['matches'][0]
+        r=self.action('correct',table=t['id'],match=m['id'],count=0,winner=m['a'],reason='forfait')
+        self.assertEqual(r.status_code,422);self.assertEqual(self.stored()[0]['tables'][0]['status'],'closed')
