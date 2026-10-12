@@ -6,7 +6,7 @@ from app import domain as d
 def fixture(n=8):
     c=d.new_competition("Coupe test","2026-11-01",2026,"organizer")
     c["open"]=[]
-    c["people"]=[dict(id=str(i),name=f"Athlète {i}",club=str(i%3),birth="2000-01-01",grade=i%6,sex="M",weight=65,disciplines=["Combat"],status="approved") for i in range(n)]
+    c["people"]=[dict(id=str(i),name=f"Athlète {i}",club=str(i%3),birth="2000-01-01",grade=i%6,sex="M",weight=65,disciplines=["Dau"],status="approved") for i in range(n)]
     c["areas"]=[dict(id="area",name="Aire 1",assistant="assistant")]
     c["officials"]=[dict(id=str(i),name=f"Officiel {i}") for i in range(4)]
     d.generate(c)
@@ -20,7 +20,7 @@ def win(m,side="a",margin=1):
     m.update(sa=margin if side=="a" else 0,sb=margin if side=="b" else 0)
     d.finish(m,m[side],"points")
 
-class CombatTests(unittest.TestCase):
+class DauTests(unittest.TestCase):
     def test_all_sizes_terminate_without_duplicate_places(self):
         for n in range(2,33):
             with self.subTest(size=n):

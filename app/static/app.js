@@ -13,7 +13,7 @@ function refreshPreservingInputs(){
     action:form.getAttribute('action')||location.pathname,kind:form.elements.action?.value||'',
     table:form.elements.table?.value||'',match:form.elements.match?.value||'',
     person:form.elements.person?.value||'',
-    fields:[...form.elements].filter(e=>e.name&&!['csrf','revision','password','current'].includes(e.name)).map(e=>({name:e.name,value:e.value,checked:e.checked,type:e.type}))
+    fields:[...form.elements].filter(e=>e.name&&e.type!=='file'&&!['csrf','revision','password','current'].includes(e.name)).map(e=>({name:e.name,value:e.value,checked:e.checked,type:e.type}))
   }));
   sessionStorage.setItem('draft:'+location.pathname,JSON.stringify(drafts));location.reload();
 }

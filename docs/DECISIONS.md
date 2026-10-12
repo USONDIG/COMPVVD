@@ -3,7 +3,7 @@
 Les réponses déjà données sont dans le cahier des charges. Ne pas reposer ces questions. Les points ci-dessous ne modifient pas les règles validées ; ils identifient les cas encore non définis.
 
 1. **Aucun perdant éligible** : si tous les perdants du tour ont abandonné, déclaré forfait ou été disqualifiés, aucun repêchage automatique ne peut être inventé. Prévoir un blocage explicite et une décision de l’organisation.
-2. **Tableaux de deux ou trois participants** : définir l’attribution éventuelle d’une troisième place sans véritable demi-finale et sans inventer un combat de classement impossible.
+2. **Tableaux de deux ou trois participants** : définir l’attribution éventuelle d’une troisième place sans véritable demi-finale et sans inventer un dau de classement impossible.
 3. **Cinquième place et repêchage** : éviter qu’un perdant de quart repêché puis médaillé reçoive aussi la cinquième place. Clarifier le cas où tous les perdants de quart sont inéligibles.
 4. **Âge de saison et majorité réelle** : la base FFK utilise les années de naissance. Confirmer, avant utilisation des équipes seniors, si l’éligibilité senior exige aussi 18 ans révolus le jour de l’événement.
 5. **Points de mort subite** : la majorité décide du point gagnant. Préciser comment ce point est représenté dans le score cumulé servant au repêchage (un point décisif ou les points de chaque juge).

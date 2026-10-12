@@ -1,6 +1,6 @@
 # Plan de développement
 
-## Lot 1 — Parcours complet Combat individuel
+## Lot 1 — Parcours complet Dau individuel
 Statut : développement en cours, non livré.
 
 ### Infrastructure et accès
@@ -33,19 +33,19 @@ Statut : développement en cours, non livré.
 - Une double validation ne doit pas ajouter deux fois les scores.
 - Une requête fondée sur une révision périmée est refusée.
 - Tester tous les effectifs de 2 à 32, notamment 3, 5, 7 et 9.
-- Tester égalités complètes, repêchages multiples, exclusions et combat complémentaire.
+- Tester égalités complètes, repêchages multiples, exclusions et dau complémentaire.
 - Vérifier les classements après correction.
 - Tester le parcours sur ordinateur, tablette et téléphone.
 - Vérifier les sauvegardes, le redémarrage et la protection des pages publiques.
 
-## Lot 2 — Lutte
-Rounds, pauses et prolongations comme en Combat ; scores de l’arbitre central, repêchage sur durée effective cumulée et classement.
+## Lot 2 — Vat
+Rounds, pauses et prolongations comme en Dau ; scores de l’arbitre central, repêchage sur durée effective cumulée et classement.
 
-## Lot 3 — Katas
-Kata, Kata Arme, notes au dixième, deux modes selon effectif, égalités à la qualification et au classement final, passages indépendants de départage.
+## Lot 3 — Quyens
+Quyen, Quyen Arme, notes au dixième, deux modes selon effectif, égalités à la qualification et au classement final, passages indépendants de départage.
 
 ## Lot 4 — Équipes
-Constitution par l’organisateur, équipes multiclubs, Kata synchro par groupe senior/non-senior, poule unique Combat équipe, effectifs asymétriques et départages.
+Constitution par l’organisateur, équipes multiclubs, Quyen synchro par groupe senior/non-senior, poule unique Dau équipe, effectifs asymétriques et départages.
 
 ## Lot 5 — Répétition générale et mise en service
 Compétition fictive complète, postes simultanés, écran public, sauvegarde/restauration, validation avec officiels et assistants.

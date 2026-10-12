@@ -23,8 +23,8 @@ def seed(app):
                                 ("club","club","club-a"),("club2","club","club-b"),("assistant","assistant",None),("assistant2","assistant",None)):
             db.execute("INSERT INTO users(id,name,username,role,club,password) VALUES(?,?,?,?,?,?)",(ident,ident,ident,role,club,HASH))
         c=d.new_competition("Coupe de test","2026-11-01",2026,"organizer")
-        c["people"]=[dict(id="p1",name="Alice privée",club="club-a",birth="2000-04-12",grade=2,sex="F",weight=52,disciplines=["Combat"],status="approved"),
-                     dict(id="p2",name="Béatrice privée",club="club-b",birth="2000-09-23",grade=3,sex="F",weight=51,disciplines=["Combat"],status="approved")]
+        c["people"]=[dict(id="p1",name="Alice privée",club="club-a",birth="2000-04-12",grade=2,sex="F",weight=52,disciplines=["Dau"],status="approved"),
+                     dict(id="p2",name="Béatrice privée",club="club-b",birth="2000-09-23",grade=3,sex="F",weight=51,disciplines=["Dau"],status="approved")]
         c["areas"]=[dict(id="aire",name="Tatami 1",assistant="assistant")]
         c["officials"]=[dict(id=str(i),name=f"Juge {i}",qualification="Arbitre") for i in range(4)]
         db.execute("INSERT INTO competitions VALUES(?,?,0)",(c["id"],json.dumps(c)))
@@ -94,7 +94,7 @@ class WebTests(unittest.TestCase):
 
     def test_stale_revision_refused(self):
         self.login()
-        self.assertEqual(self.action("discipline",discipline="Combat").status_code,200)
+        self.assertEqual(self.action("discipline",discipline="Dau").status_code,200)
         r=self.action("generate")
         self.assertEqual(r.status_code,409)
         self.assertEqual(self.stored()[0]["tables"],[])
@@ -108,14 +108,14 @@ class WebTests(unittest.TestCase):
 
     def test_register_approve_generate_workflow(self):
         self.login("club")
-        r=self.action("register",name="Caroline",birth="2000-03-10",sex="F",weight="53",grade="1",disciplines=["Combat"])
+        r=self.action("register",name="Caroline",birth="2000-03-10",sex="F",weight="53",grade="1",disciplines=["Dau"])
         self.assertEqual(r.status_code,200,r.data)
         c,rev=self.stored()
         p=c["people"][-1]
         self.assertEqual(p["status"],"pending")
         self.login("organizer")
         self.assertEqual(self.action("approve",revision=rev,person=p["id"]).status_code,200)
-        self.assertEqual(self.action("discipline",revision=rev+1,discipline="Combat").status_code,200)
+        self.assertEqual(self.action("discipline",revision=rev+1,discipline="Dau").status_code,200)
         self.assertEqual(self.action("generate",revision=rev+2).status_code,200)
         self.assertEqual(len(self.stored()[0]["tables"]),1)
         self.assertEqual(self.action("edit",revision=rev+3,person="p1").status_code,422)
@@ -145,7 +145,7 @@ class WebTests(unittest.TestCase):
 
     def test_assistant_scope_and_render_table(self):
         self.login()
-        self.action("discipline",discipline="Combat")
+        self.action("discipline",discipline="Dau")
         self.action("generate",revision=1)
         c,rev=self.stored();t=c["tables"][0]
         fields=MultiDict([("action","configure"),("revision",str(rev)),("table",t["id"]),("area","aire"),("referee","3"),
@@ -194,10 +194,10 @@ class WebTests(unittest.TestCase):
             self.assertEqual(r.status_code,401)
         self.assertEqual(self.post("/login",dict(username="wrong",password="wrong")).status_code,429)
 
-    def test_lutte_operator_flow_and_correction(self):
+    def test_vat_operator_flow_and_correction(self):
         c=self.c
         c['open']=[]
-        for p in c['people']: p['disciplines'].append('Lutte')
+        for p in c['people']: p['disciplines'].append('Vat')
         with closing(connect(self.app.config['DATABASE'])) as db:
             db.execute('UPDATE competitions SET state=? WHERE id=?',(json.dumps(c),c['id']))
             db.commit()
@@ -206,7 +206,7 @@ class WebTests(unittest.TestCase):
             _,rev=self.stored()
             r=self.action(name,revision=rev,**kw)
             self.assertEqual(r.status_code,200,r.data)
-        act('generate',discipline='Lutte')
+        act('generate',discipline='Vat')
         c,_=self.stored(); t=c['tables'][0]; tid=t['id']
         act('configure',table=tid,area='aire',referee='3',rounds='1',seconds='30',rest='10')
         act('draw',table=tid)

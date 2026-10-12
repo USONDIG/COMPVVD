@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<a href="/c/{{c.id}}#inscriptions">← {{c.name}}</a>
+<h1>Importer les compétiteurs</h1>
+{% if imported %}
+<section class="panel"><h2>{{imported}} inscription{{'s' if imported>1 else ''}} envoyée{{'s' if imported>1 else ''}}</h2><p>Les inscriptions sont en attente d’approbation par l’organisateur.</p><a class="button" href="/c/{{c.id}}#inscriptions">Voir les inscriptions</a></section>
+{% else %}
+<section class="panel"><h2>1. Remplir le modèle Excel</h2><p>Remplissez la feuille <strong>Inscriptions</strong>, une personne par ligne. La feuille <strong>Exemples et aide</strong> contient des exemples fictifs et n’est jamais importée.</p><p>Le club est celui de votre compte. Cochez les disciplines avec « Oui ». Seules les disciplines ouvertes sont acceptées : <strong>{{c.open|join(', ') or 'aucune'}}</strong>.</p><a class="button secondary" href="/c/{{c.id}}/import/template">Télécharger le modèle Excel</a></section>
+<section class="panel"><h2>2. Vérifier le fichier</h2><p>Format .xlsx uniquement · 2 Mo maximum · 500 participants maximum. Les doublons et les données invalides sont bloqués.</p><form method="post" enctype="multipart/form-data"><input type="hidden" name="csrf" value="{{csrf}}"><label>Fichier Excel<input type="file" name="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></label><button>Prévisualiser et vérifier</button></form></section>
+{% if errors %}<section class="panel" role="alert"><h2>Corrigez le fichier avant de continuer</h2><p><strong>Aucune inscription n’a été enregistrée.</strong> Corrigez ces lignes puis rechargez le fichier.</p><ul>{% for error in errors %}<li>Ligne {{error.line}} : {{error.message}}</li>{% endfor %}</ul></section>{% endif %}
+{% if preview %}<section class="panel scroll"><h2>3. Vérifier les {{preview|length}} lignes valides</h2><table><thead><tr><th>Ligne</th><th>Nom</th><th>Naissance</th><th>Sexe</th><th>Poids kg</th><th>Grade</th><th>Disciplines</th></tr></thead><tbody>{% for p in preview %}<tr><td>{{p.line}}</td><td>{{p.name}}</td><td>{{p.birth}}</td><td>{{p.sex}}</td><td>{{p.weight}}</td><td>{{p.grade}}</td><td>{{p.disciplines|join(', ')}}</td></tr>{% endfor %}</tbody></table>
+{% if batch %}<p>En confirmant, ces compétiteurs seront inscrits dans votre club, en attente d’approbation. La prévisualisation expire après 30 minutes.</p><form method="post"><input type="hidden" name="csrf" value="{{csrf}}"><input type="hidden" name="confirm" value="{{batch}}"><button>Confirmer les {{preview|length}} inscriptions</button></form>{% endif %}</section>{% endif %}
+{% endif %}{% endblock %}

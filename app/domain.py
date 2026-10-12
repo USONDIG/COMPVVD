@@ -1,4 +1,4 @@
-"""Règles du parcours Combat individuel. Indépendant du serveur HTTP."""
+"""Règles du parcours Dau individuel. Indépendant du serveur HTTP."""
 from collections import defaultdict
 from datetime import date
 import math
@@ -8,7 +8,7 @@ import time
 import uuid
 
 GRADES = ["Ceinture blanche", "Premier cap", "Deuxième cap", "Troisième cap", "Ceinture bleue", "Ceinture noire"]
-DISCIPLINES = ["Combat", "Kata", "Lutte", "Kata Arme", "Combat équipe", "Kata synchro"]
+DISCIPLINES = ["Dau", "Quyen", "Vat", "Quyen Arme", "Dau équipe", "Quyen synchro"]
 AGES = ["Mini-poussins", "Poussins", "Pupilles", "Benjamins", "Minimes", "Cadets", "Juniors", "Seniors"]
 WEIGHTS = {
     "F": [[25,35],[25,35],[25,30,35,40,45],[30,35,40,45,50],[35,40,45,50,55],[47,54,61],[48,53,59,66],[50,55,61,68]],
@@ -30,11 +30,21 @@ def integer(v, low, high, label):
     require(type(v) is int and low <= v <= high, f"{label} : entier entre {low} et {high}.")
     return v
 
+LEGACY_DISCIPLINES = {"Combat":"Dau", "Lutte":"Vat", "Kata":"Quyen", "Kata Arme":"Quyen Arme", "Combat équipe":"Dau équipe", "Kata synchro":"Quyen synchro"}
+
+def normalize_competition(c):
+    c["open"]=[LEGACY_DISCIPLINES.get(x,x) for x in c["open"]]
+    for p in c["people"]:
+        p["disciplines"]=[LEGACY_DISCIPLINES.get(x,x) for x in p["disciplines"]]
+    for t in c["tables"]:
+        t["discipline"]=LEGACY_DISCIPLINES.get(t["discipline"],t["discipline"])
+    return c
+
 def new_competition(name, day, season, owner):
     date.fromisoformat(day)
     integer(season, 2020, 2100, "Saison")
     return dict(id=uid(), name=name, date=day, season=season, owner=owner, code=secrets.token_hex(6).upper(),
-                open=["Combat"], weights=copy.deepcopy(WEIGHTS), people=[], areas=[], officials=[], tables=[])
+                open=["Dau"], weights=copy.deepcopy(WEIGHTS), people=[], areas=[], officials=[], tables=[])
 
 def age_index(p, c):
     age = c["season"] - date.fromisoformat(p["birth"]).year
@@ -70,8 +80,8 @@ def match(a, b, turn, kind="main"):
     return dict(id=uid(), a=a, b=b, turn=turn, kind=kind, state="pending", rounds=[],
                 sa=0, sb=0, winner=None, loser=None, reason=None, votes=None, timer=None)
 
-def generate(c, discipline="Combat"):
-    require(discipline in ("Combat","Lutte"), "Discipline non disponible.")
+def generate(c, discipline="Dau"):
+    require(discipline in ("Dau","Vat"), "Discipline non disponible.")
     require(not any(t["discipline"]==discipline for t in c["tables"]), "Les tableaux ont déjà été générés.")
     require(discipline not in c["open"], "Fermez d’abord les inscriptions "+discipline+".")
     groups = defaultdict(list)
@@ -90,14 +100,14 @@ def draw(c, t):
     pairs, spare = pair(t["members"], {p["id"]:p for p in c["people"]})
     t.update(turn=1, spare=spare, status="ready", matches=[match(a,b,1) for a,b in pairs])
 
-def best_loser(c, matches, excluded=(), discipline="Combat"):
+def best_loser(c, matches, excluded=(), discipline="Dau"):
     excluded = set(excluded) | {m["loser"] for m in matches if m["state"] == "done" and m["reason"] != "points"}
     eligible = [m for m in matches if m["state"] == "done" and m["reason"] == "points" and m["loser"] not in excluded]
     require(eligible, "Aucun perdant éligible au repêchage. Décision de l’organisation nécessaire.")
     people = {p["id"]:p for p in c["people"]}
     def key(m):
         p = people[m["loser"]]
-        criterion = -fight_time(m) if discipline=="Lutte" else abs(m["sa"]-m["sb"])
+        criterion = -fight_time(m) if discipline=="Vat" else abs(m["sa"]-m["sb"])
         return criterion, p["grade"], -date.fromisoformat(p["birth"]).toordinal()
     best = min(map(key, eligible))
     return secrets.choice([m["loser"] for m in eligible if key(m) == best])
@@ -107,7 +117,7 @@ def start_table(c, t):
     require(t["seconds"] > 0, "Configurez la durée des rounds avant de lancer ce tableau.")
     area = next((a for a in c["areas"] if a["id"] == t["area"]), None)
     require(area and area["assistant"], "Affectez une aire et un assistant.")
-    require(t["referee"] and (not t["judges"] if t["discipline"]=="Lutte" else len(t["judges"])==3), "Affectez l’arbitre central et les juges requis par la discipline.")
+    require(t["referee"] and (not t["judges"] if t["discipline"]=="Vat" else len(t["judges"])==3), "Affectez l’arbitre central et les juges requis par la discipline.")
     for other in c["tables"]:
         if other["status"] != "active":
             continue
@@ -119,18 +129,18 @@ def start_table(c, t):
 def advance(c, t):
     require(t["status"] == "active", "Le tableau doit être en cours.")
     current = [m for m in t["matches"] if m["turn"] == t["turn"] and m["kind"] != "bronze"]
-    require(current and all(m["state"] == "done" for m in current), "Terminez les combats du tour.")
+    require(current and all(m["state"] == "done" for m in current), "Terminez les daus du tour.")
     if t["spare"]:
         pid = best_loser(c, current, discipline=t["discipline"])
         t["matches"].append(match(t["spare"], pid, t["turn"], "odd"))
-        t["repechages"].append(dict(turn=t["turn"], participant=pid, kind="combat complémentaire"))
+        t["repechages"].append(dict(turn=t["turn"], participant=pid, kind="dau complémentaire"))
         t["spare"] = None
         return
     winners = [m["winner"] for m in current]
     require(len(set(winners)) == len(winners), "Double qualification incohérente.")
     if len(winners) == 1:
         bronze = [m for m in t["matches"] if m["kind"] == "bronze"]
-        require(not bronze or bronze[0]["state"] == "done", "Terminez le combat de classement.")
+        require(not bronze or bronze[0]["state"] == "done", "Terminez le dau de classement.")
         t["places"] = {"1":current[0]["winner"], "2":current[0]["loser"]}
         if bronze:
             t["places"].update({"3":bronze[0]["winner"], "4":bronze[0]["loser"]})
@@ -173,11 +183,11 @@ def bank_time(m):
         m["fight_elapsed"]=m.get("fight_elapsed",0)+seconds
 
 def start_round(c, t, m):
-    require(t["status"] == "active" and m["state"] in ("pending","rest"), "Combat non disponible.")
+    require(t["status"] == "active" and m["state"] in ("pending","rest"), "Dau non disponible.")
     for other in c["tables"]:
         for bout in other["matches"]:
             if bout["id"] != m["id"] and bout["state"] in ("running","paused","rest","correction"):
-                require(other["area"] != t["area"], "Un combat est déjà engagé sur cette aire.")
+                require(other["area"] != t["area"], "Un dau est déjà engagé sur cette aire.")
                 require(not ({m["a"],m["b"]} & {bout["a"],bout["b"]}), "Un participant est engagé sur une autre aire.")
     if m["state"] == "rest":
         require(elapsed(m["timer"]) >= m["timer"]["duration"], "La pause n’est pas terminée.")
@@ -202,8 +212,8 @@ def finish(m, winner, reason):
         m["timer"]["running"] = False
     m.update(state="done", winner=winner, loser=m["b"] if winner==m["a"] else m["a"], reason=reason)
 
-def lutte_point(t, m, winner):
-    require(t["discipline"]=="Lutte" and t["status"]=="active", "Tableau Lutte actif requis.")
+def vat_point(t, m, winner):
+    require(t["discipline"]=="Vat" and t["status"]=="active", "Tableau Vat actif requis.")
     require(m["state"] in ("running","paused") and m["timer"]["duration"] is None,
             "Le premier point ne termine que la mort subite.")
     require(len(m["rounds"])>=t["rounds"]+2, "Les rounds et prolongations doivent être terminés.")
@@ -223,7 +233,7 @@ def score(t, m, scores):
     require(m["state"] in ("running","paused"), "Lancez le round avant la saisie.")
     require(m["timer"]["duration"] is not None, "Saisissez les votes de mort subite.")
     require(elapsed(m["timer"]) >= m["timer"]["duration"], "Le round n’est pas terminé.")
-    validate_scores(scores,1 if t["discipline"]=="Lutte" else 3)
+    validate_scores(scores,1 if t["discipline"]=="Vat" else 3)
     m["rounds"].append(scores)
     m["sa"] += sum(scores[0])
     m["sb"] += sum(scores[1])
@@ -247,20 +257,20 @@ def correct(t, m, rounds, winner, reason, votes=None, duration=None):
     dependents = [x for x in t["matches"] if x["turn"]>m["turn"] or
                   (x["turn"]==m["turn"] and x["kind"]=="odd" and x["id"]!=m["id"])]
     require(all(x["state"]=="pending" for x in dependents),
-            "Un combat dépendant a déjà commencé : correction bloquée pour préserver l’historique.")
+            "Un dau dépendant a déjà commencé : correction bloquée pour préserver l’historique.")
     require(isinstance(rounds,list) and len(rounds)<=22, "Liste de rounds invalide.")
     require(reason in ("points","forfait","abandon","disqualification"), "Décision invalide.")
     for r in rounds:
-        validate_scores(r,1 if t["discipline"]=="Lutte" else 3)
+        validate_scores(r,1 if t["discipline"]=="Vat" else 3)
     sa, sb = sum(sum(r[0]) for r in rounds), sum(sum(r[1]) for r in rounds)
-    if t["discipline"]=="Lutte":
+    if t["discipline"]=="Vat":
         require(type(duration) in (int,float) and math.isfinite(duration) and duration>=0, "Durée effective invalide.")
     if reason=="points":
-        require(t["discipline"]!="Lutte" or len(rounds)>=t["rounds"], "Tous les rounds réglementaires sont requis.")
+        require(t["discipline"]!="Vat" or len(rounds)>=t["rounds"], "Tous les rounds réglementaires sont requis.")
         if sa==sb:
-            needed=1 if t["discipline"]=="Lutte" else 2
-            count=1 if t["discipline"]=="Lutte" else 3
-            require((t["discipline"]!="Lutte" or len(rounds)>=t["rounds"]+2) and votes and len(votes)==count and
+            needed=1 if t["discipline"]=="Vat" else 2
+            count=1 if t["discipline"]=="Vat" else 3
+            require((t["discipline"]!="Vat" or len(rounds)>=t["rounds"]+2) and votes and len(votes)==count and
                     votes.count("a" if winner==m["a"] else "b")>=needed,
                     "Une égalité nécessite la décision de mort subite après les prolongations.")
             if winner==m["a"]: sa+=1
@@ -273,7 +283,7 @@ def correct(t, m, rounds, winner, reason, votes=None, duration=None):
     t["repechages"]=[x for x in t["repechages"] if x["turn"]<m["turn"]]
     t.update(turn=m["turn"],status="active",closed=None,places={})
     m.update(rounds=rounds,sa=sa,sb=sb,votes=votes)
-    if t["discipline"]=="Lutte":
+    if t["discipline"]=="Vat":
         m["fight_elapsed"]=duration
         m["timer"]=dict(elapsed=duration,since=time.time(),running=False,duration=None)
     finish(m,winner,reason)
@@ -281,7 +291,7 @@ def correct(t, m, rounds, winner, reason, votes=None, duration=None):
 def rankings(c):
     points=defaultdict(int)
     for t in c["tables"]:
-        if t["status"]=="closed" and t["discipline"] not in ("Combat équipe","Kata synchro"):
+        if t["status"]=="closed" and t["discipline"] not in ("Dau équipe","Quyen synchro"):
             for place,pid in t["places"].items():
                 points[pid]+=POINTS[place]
     groups={"Enfants":[],"Adultes":[],"Clubs":[]}
