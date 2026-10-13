@@ -1,0 +1,12 @@
+{% macro drawing(t,names,clubnames={}) %}{% set graph=bracket_diagram(t,names,clubnames) %}
+{% if graph.nodes %}<div class="tree-scroll" tabindex="0" role="region" aria-label="Arbre défilant de {{t.discipline}} {{t.name}}"><div class="tree-canvas" data-tree="{{t.id}}">
+<svg class="tournament-svg" width="{{graph.width}}" height="{{graph.height}}" viewBox="0 0 {{graph.width}} {{graph.height}}" role="img" aria-labelledby="svg-title-{{t.id}} svg-desc-{{t.id}}" xmlns="http://www.w3.org/2000/svg">
+<title id="svg-title-{{t.id}}">{{t.discipline}} · {{t.name}} · arbre des confrontations</title><desc id="svg-desc-{{t.id}}">Les rencontres progressent de gauche à droite jusqu’à la finale. Les cases en pointillés sont prévisionnelles. Les repêchages sont déterminés après validation du tour. Les vainqueurs sont marqués d’une coche.</desc>
+{% for edge in graph.edges %}<path d="{{edge.path}}" class="diagram-link {{edge.kind}}"/>{% endfor %}
+{% for n in graph.nodes %}<g class="diagram-bout {{n.state}} {{n.kind}}" transform="translate({{n.x}},{{n.y}})" data-bout="{{n.id}}">
+<title>{{n.title}} · {% for row in n.rows %}{{row.name}}{% if row.club %} ({{row.club}}){% endif %} : {{row.score}}{{' / ' if not loop.last else ''}}{% endfor %}</title>
+<text x="0" y="-12" class="diagram-stage">{{n.title}}</text><rect width="270" height="142" rx="8" class="diagram-card"/><text x="12" y="21" class="diagram-status">{{'À déterminer' if n.state=='future' else labels.get(n.state,n.state)}}</text>
+{% for row in n.rows %}{% set y=47+loop.index0*47 %}<g class="{{'diagram-winner' if row.winner else ''}}"><rect x="9" y="{{y-9}}" width="5" height="33" rx="2" class="{{'diagram-red' if loop.first else 'diagram-blue'}}"/><text x="22" y="{{y+6}}" class="diagram-name">{{('✓ ' if row.winner else '')~row.name|truncate(25,true,'…')}}</text><text x="22" y="{{y+23}}" class="diagram-club">{{row.club|truncate(29,true,'…')}}</text><rect x="224" y="{{y-11}}" width="36" height="35" rx="3" class="diagram-score-bg"/><text x="242" y="{{y+12}}" text-anchor="middle" class="diagram-score">{{row.score}}</text></g>{% endfor %}
+<path d="M 22 79 H 260" class="diagram-divider"/>{% if n.duration is defined and n.duration!=none %}<text x="12" y="136" class="diagram-status">Durée effective : {{n.duration}} s</text>{% endif %}</g>{% endfor %}
+</svg></div></div>{% else %}<p class="empty">L’arbre apparaîtra après le tirage au sort.</p>{% endif %}
+{% endmacro %}

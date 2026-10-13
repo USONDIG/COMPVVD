@@ -44,3 +44,11 @@ Les notes et scores peuvent être corrigés uniquement par l’organisateur ou l
 Un combattant engagé en Dau/Vat ne peut pas commencer simultanément un passage Quyen, y compris comme membre d’une équipe synchro. Une aire ne reçoit qu’un tableau actif ; les officiels ne peuvent pas être affectés simultanément à deux tableaux actifs.
 
 Le spectateur utilise le code de compétition puis sélectionne l’aire ou le tableau. Il voit les notes et qualifications Quyen, les rencontres et classements de poule, ainsi que les arbres des épreuves individuelles. Les dates de naissance, poids, comptes et qualifications d’officiels ne sont pas affichés publiquement.
+
+## Arbres et impressions Dau/Vat
+
+Les rencontres sont présentées en blocs de deux concurrents, avec scores et vainqueurs, puis reliées jusqu’à la finale. Les tours futurs apparaissent en pointillés ; aucun adversaire repêché n’est inventé avant le calcul officiel. Les places 3 et 4 sont présentées séparément. Les clubs accompagnent les noms.
+
+« Imprimer l’arbre / PDF » ouvre une page d’impression dédiée, sans contrôles de saisie. Le format par défaut est A4 paysage ; un lien permet de choisir A3 paysage pour les grands tableaux. L’arbre est vectoriel et peut être agrandi dans le PDF. Les classements du tableau et les classements généraux ont leurs propres liens d’impression.
+
+La page publique actualise les résultats toutes les cinq secondes, sans navigation complète. Les choix d’aire et de tableau, la position de défilement et les détails ouverts sont conservés. En cas de perte réseau, le dernier état reste visible avec une indication de déconnexion ; les tentatives reprennent automatiquement. L’actualisation est suspendue pendant l’impression et quand l’onglet est masqué.
