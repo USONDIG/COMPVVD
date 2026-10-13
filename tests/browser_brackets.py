@@ -27,7 +27,7 @@ with tempfile.TemporaryDirectory() as tmp:
     server=make_server('127.0.0.1',0,app,threaded=True);threading.Thread(target=server.serve_forever,daemon=True).start()
     base=f'http://127.0.0.1:{server.server_port}';Path('test-results').mkdir(exist_ok=True)
     with sync_playwright() as pw:
-        browser=pw.chromium.launch();page=browser.new_page(viewport={'width':1440,'height':1000})
+        browser=pw.chromium.launch();context=browser.new_context(viewport={'width':1440,'height':1000});page=context.new_page()
         errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
         page.goto(base+'/public');page.get_by_label('Code de compétition').fill(c['code']);page.get_by_role('button',name='Voir les résultats').click()
         page.get_by_label('Tableau à suivre').select_option(t['id']);page.get_by_label('Tableau à suivre').focus()
@@ -45,7 +45,7 @@ with tempfile.TemporaryDirectory() as tmp:
         assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2')
         tree.locator('xpath=..').evaluate('(el)=>{el.scrollLeft=150}')
         page.screenshot(path='test-results/arbre-public-mobile.png',full_page=True)
-        print_page=page.context.new_page()
+        print_page=context.new_page()
         print_page.set_viewport_size({'width':1400,'height':1000})
         for table in (t,vt):
             print_page.goto(base+f'/public/print?kind=tree&table={table["id"]}')
