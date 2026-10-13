@@ -21,6 +21,7 @@ from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import domain as d
 from . import disciplines as extra
+from .brackets import diagram
 from .imports import read_registration_file
 from werkzeug.datastructures import MultiDict
 
@@ -329,7 +330,7 @@ def create_app(config=None):
             if not hmac.compare_digest(session["csrf"],supplied):
                 abort(403,description="Jeton de sécurité invalide. Rechargez la page.")
             g.db.execute("BEGIN IMMEDIATE")
-        if request.endpoint not in ("login","public","health","static") and not g.user:
+        if request.endpoint not in ("login","public","public_print","health","static") and not g.user:
             if request.method=="GET":
                 return redirect(url_for("login"))
             abort(401)
@@ -375,7 +376,7 @@ def create_app(config=None):
         return dict(csrf=session.get("csrf",""),user=g.user,grades=d.GRADES,disciplines=d.DISCIPLINES,ages=d.AGES,fight_time=d.fight_time,
                     labels={"draft":"À préparer","ready":"Prêt","active":"En cours","closed":"Clôturé","pending":"En attente","approved":"Approuvé","rejected":"Refusé","running":"En cours","paused":"Suspendu","rest":"Pause","done":"Terminé"},
                     roles={"admin":"Administrateur","organizer":"Organisateur","club":"Responsable de club","assistant":"Assistant de table"},
-                    now=time.time(),quyen_disciplines=extra.QUYEN,team_disciplines=extra.TEAM,entry_names=extra.names,
+                    now=time.time(),bracket_diagram=diagram,quyen_disciplines=extra.QUYEN,team_disciplines=extra.TEAM,entry_names=extra.names,
                     current_match=extra.current_match,pool_standings=extra.pool_standings,encounter_stats=extra.encounter_stats)
 
     def done(location):
@@ -520,7 +521,35 @@ def create_app(config=None):
         t=find(c["tables"],tid)
         operator(c,t)
         return render_template("quyen.html" if t["discipline"] in extra.QUYEN else "table.html",c=c,t=t,manager=managed(c),people={p["id"]:p for p in c["people"]},
-            officials={o["id"]:o["name"] for o in c["officials"]},area=next((a for a in c["areas"] if a["id"]==t["area"]),{}))
+            officials={o["id"]:o["name"] for o in c["officials"]},clubs={r["id"]:r["name"] for r in rows("SELECT * FROM clubs")},area=next((a for a in c["areas"] if a["id"]==t["area"]),{}))
+
+    def print_results(c,is_public=False):
+        kind=request.args.get("kind","rankings")
+        d.require(kind in ("tree","rankings","table"),"Impression inconnue.")
+        t=find(c["tables"],request.args.get("table")) if kind in ("tree","table") else None
+        if t:
+            if is_public:d.require(t["status"]!="draft","Tableau pas encore publié.")
+            else:operator(c,t)
+        elif not is_public:manager(c)
+        if kind=="tree":d.require(t["discipline"] in ("Dau","Vat"),"Arbre réservé aux disciplines individuelles Dau et Vat.")
+        paper=request.args.get("paper","a4")
+        d.require(paper in ("a4","a3"),"Format papier invalide.")
+        return render_template("print.html",c=c,t=t,kind=kind,paper=paper,is_public=is_public,
+            names=extra.names(c),clubs={r["id"]:r["name"] for r in rows("SELECT * FROM clubs")},
+            rankings=c.get("rankings") if is_public else d.rankings(c),suppress_tree_controls=True)
+
+    @app.get("/c/<cid>/print")
+    def competition_print(cid):
+        c=competition(cid)
+        return print_results(c)
+
+    @app.get("/public/print")
+    def public_print():
+        if not session.get("public_id"):return redirect("/public")
+        c=competition(session["public_id"])
+        if not hmac.compare_digest(digest(c["code"]),session.get("public_digest","")):
+            return redirect("/public")
+        return print_results(public_view(c),True)
 
     @app.get("/c/<cid>/import/template")
     def import_template(cid):

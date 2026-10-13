@@ -1,6 +1,6 @@
 'use strict';
-let dirty=false,busy=false;
-const offset=Number(document.body.dataset.serverTime)*1000-Date.now();
+let dirty=false,busy=false,printing=false;
+let offset=Number(document.body.dataset.serverTime)*1000-Date.now();
 function showError(message,conflict=false){
   const el=document.getElementById('notice');el.textContent=message;el.className='show';
   if(conflict){const b=document.createElement('button');b.textContent='Actualiser sans perdre les champs';b.className='secondary small';b.addEventListener('click',refreshPreservingInputs);el.appendChild(b);}
@@ -66,49 +66,48 @@ if(filter&&tableFilter){
  if(sessionStorage.getItem('screen')==='1')document.body.classList.add('screen');
 }
 tick();setInterval(tick,200);
-setInterval(async()=>{if(!document.querySelector('[data-live]')||dirty||busy||document.hidden||['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName))return;try{const r=await fetch('/health',{cache:'no-store'});if(r.ok)location.reload();else showError('Connexion indisponible. Résultats non actualisés.');}catch(e){showError('Connexion interrompue. Affichage du dernier état reçu.');}},5000);
+async function refreshPublic(){
+ const current=document.querySelector('[data-public-live]');if(!current)return;
+ try{
+  const r=await fetch('/public',{cache:'no-store',credentials:'same-origin'});if(!r.ok)throw new Error('http');
+  const doc=new DOMParser().parseFromString(await r.text(),'text/html');
+  if(!doc.querySelector('[data-public-live]')){location.assign('/public');return;}
+  if(printing)return;
+  const scrolls=new Map([...current.querySelectorAll('[data-tree]')].map(el=>[el.dataset.tree,{x:el.parentElement.scrollLeft,y:el.parentElement.scrollTop}]));
+  const details=new Map([...current.querySelectorAll('details[id]')].map(el=>[el.id,el.open]));
+  const position=window.scrollY;
+  for(const id of ['live-matches','public-trees']){
+   const old=document.getElementById(id),fresh=doc.getElementById(id);if(old&&fresh)old.replaceChildren(...fresh.childNodes);
+  }
+  // Refresh options without replacing the focused selectors or resetting choices.
+  for(const select of [filter,tableFilter])if(select){const value=select.value;select.replaceChildren(...doc.getElementById(select.id).childNodes);select.value=value;}
+  offset=Number(doc.body.dataset.serverTime)*1000-Date.now();
+  filterAreas();renderTrees();tick();
+  for(const el of current.querySelectorAll('[data-tree]')){const saved=scrolls.get(el.dataset.tree);if(saved){el.parentElement.scrollLeft=saved.x;el.parentElement.scrollTop=saved.y;}}
+  for(const [id,open] of details){const el=document.getElementById(id);if(el)el.open=open;}
+  window.scrollTo(0,position);
+  document.getElementById('connection').textContent='À jour à '+new Date().toLocaleTimeString('fr-FR')+' · actualisation toutes les 5 secondes';
+ }catch(e){const el=document.getElementById('connection');if(el)el.textContent='Connexion interrompue · dernier état conservé. Nouvelle tentative automatique.';}
+}
+let refreshing=false;
+setInterval(async()=>{
+ if(!document.querySelector('[data-live]')||busy||printing||document.hidden||refreshing)return;
+ if(document.querySelector('[data-public-live]')){refreshing=true;try{await refreshPublic();}finally{refreshing=false;}return;}
+ if(dirty||['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName))return;
+ try{const r=await fetch('/health',{cache:'no-store'});if(r.ok)location.reload();else showError('Connexion indisponible. Résultats non actualisés.');}catch(e){showError('Connexion interrompue. Affichage du dernier état reçu.');}
+},5000);
+let printDetails=[];
+window.addEventListener('beforeprint',()=>{printing=true;printDetails=[...document.querySelectorAll('details')].map(el=>[el,el.open]);for(const [el] of printDetails)el.open=true;});
+window.addEventListener('afterprint',()=>{printing=false;for(const [el,open] of printDetails)el.open=open;});
+
 
 function renderTrees(){
  for(const canvas of document.querySelectorAll('[data-tree]')){
-  const cards=[...canvas.querySelectorAll('[data-bout]')],svg=canvas.querySelector('svg');
-  svg.replaceChildren();
-  const columnKeys=[...new Set(cards.map(c=>Number(c.dataset.turn)*2+(c.dataset.kind==='odd'?1:0)))].sort((a,b)=>a-b);
-  const latest=new Map(),bottoms=new Map(),nodes=new Map(),edges=[];
-  let height=0;
-  for(const card of cards){
-   const d=card.dataset,col=columnKeys.indexOf(Number(d.turn)*2+(d.kind==='odd'?1:0));
-   const sources=['a','b'].map(side=>({side,pid:d[side],source:latest.get(d[side])})).filter(x=>x.source);
-   const x=col*340;
-   let y=Math.max(24,bottoms.get(col)||24);
-   if(sources.length)y=Math.max(y,sources.reduce((s,e)=>s+e.source.y+e.source.h/2,0)/sources.length-card.offsetHeight/2);
-   card.style.left=x+'px';card.style.top=y+'px';
-   const node={card,x,y,h:card.offsetHeight,w:card.offsetWidth};
-   nodes.set(d.bout,node);bottoms.set(col,y+node.h+32);height=Math.max(height,y+node.h+24);
-   for(const edge of sources){
-    const source=edge.source;
-    // A repechage is an explicit second path from the previous losing bout.
-    const kind=d.kind==='bronze'?'bronze':source.card.dataset.winner===edge.pid?'qualified':'repechage';
-    edges.push({source,node,side:edge.side,kind});
-   }
-   // A placement bout must not replace the source of a championship path.
-   if(d.kind!=='bronze')for(const side of ['a','b'])latest.set(d[side],node);
-  }
-  const width=Math.max(280,columnKeys.length*340-60);
-  canvas.style.width=width+'px';canvas.style.height=height+'px';
-  svg.setAttribute('width',width);svg.setAttribute('height',height);
-  for(const {source,node,side,kind} of edges){
-   const row=node.card.querySelector('[data-side="'+side+'"]');
-   const x1=source.x+source.w,y1=source.y+source.h/2,x2=node.x,y2=node.y+row.offsetTop+row.offsetHeight/2;
-   const mid=x1+(x2-x1)/2,path=document.createElementNS('http://www.w3.org/2000/svg','path');
-   path.setAttribute('d',`M ${x1} ${y1} H ${mid} V ${y2} H ${x2}`);
-   path.setAttribute('class','tree-link '+kind);svg.appendChild(path);
-  }
   const scroll=canvas.parentElement,key='tree-scroll:'+location.pathname+':'+canvas.dataset.tree;
-  scroll.scrollLeft=Number(sessionStorage.getItem(key)||0);
-  if(!scroll.dataset.bound){scroll.addEventListener('scroll',()=>sessionStorage.setItem(key,String(scroll.scrollLeft)),{passive:true});scroll.dataset.bound='1';}
+  if(!scroll.dataset.bound){
+   scroll.scrollLeft=Number(sessionStorage.getItem(key)||0);
+   scroll.addEventListener('scroll',()=>sessionStorage.setItem(key,String(scroll.scrollLeft)),{passive:true});scroll.dataset.bound='1';
+  }
  }
 }
 renderTrees();
-window.addEventListener('resize',renderTrees);
-document.fonts?.ready.then(renderTrees);
-
