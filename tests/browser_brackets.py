@@ -45,7 +45,8 @@ with tempfile.TemporaryDirectory() as tmp:
         assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2')
         tree.locator('xpath=..').evaluate('(el)=>{el.scrollLeft=150}')
         page.screenshot(path='test-results/arbre-public-mobile.png',full_page=True)
-        print_page=browser.new_page(viewport={'width':1400,'height':1000})
+        print_page=page.context.new_page()
+        print_page.set_viewport_size({'width':1400,'height':1000})
         for table in (t,vt):
             print_page.goto(base+f'/public/print?kind=tree&table={table["id"]}')
             expect(print_page.locator('svg')).to_be_visible()
