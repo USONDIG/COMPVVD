@@ -1,54 +1,22 @@
-# Plan de développement
+# État du développement
 
-## Lot 1 — Parcours complet Dau individuel
-Statut : développement en cours, non livré.
+## Développé et couvert par les tests
 
-### Infrastructure et accès
-- Serveur web et base de données persistante.
-- Comptes créés par l’administrateur, autorisations côté serveur, sessions et protection CSRF.
-- Clubs, compétitions et affectation des organisateurs.
-- Historique des validations et corrections.
+- Accès par rôle, compétitions, clubs, officiels, assistants et aires.
+- Inscriptions en ligne, validation organisateur, import Excel avec exemple et contrôle avant import.
+- Dau individuel et Vat : tableaux, rounds, pauses, prolongations, mort subite, repêchages et places de classement.
+- Quyen et Quyen Arme : deux tours, trois notes au dixième, qualification et départages.
+- Quyen synchro : composition des équipes et séparation seniors / moins de 18 ans, même notation Quyen.
+- Dau équipe : composition, poule unique, confrontations individuelles, départages des rencontres et classement de poule.
+- Corrections journalisées et blocage des corrections qui modifieraient des épreuves dépendantes commencées.
+- Suivi public par code, filtre aire / tableau, arbres, notes, poules, classements et impression.
+- Tests automatisés Python et parcours réels Chromium sur ordinateur et mobile.
 
-### Inscriptions et catégories
-- Formulaire pour responsables de club.
-- Validation par l’organisateur, modification après validation réservée à l’organisateur.
-- Génération sexe / âge / poids, catégories FFK modifiables, fusion avant tirage.
-- Tirage définitif sans édition manuelle, évitement des duels intra-club.
+## Avant mise en service réelle
 
-### Déroulement
-- Une table par aire, configuration des officiels et assistant.
-- Rounds lancés manuellement, chronomètres persistants côté serveur.
-- Six saisies par round, prolongations et votes de mort subite.
-- Premier tour impair, repêchages répétés, finale et places 3–5.
-- Corrections par l’organisateur avec gestion explicite des tours dépendants.
+- Remplacer le stockage temporaire de l’instance Render de test par une solution persistante, vérifier sauvegarde et restauration.
+- Effectuer une répétition générale avec plusieurs postes, assistants et officiels sur une compétition fictive complète.
+- Valider les cas sportifs encore ouverts dans DECISIONS.md, notamment les corrections tardives, forfaits Quyen et critères d’âge senior.
+- Dimensionner l’hébergement pour les effectifs et le nombre de spectateurs attendus.
 
-### Résultats et exports
-- Classements mixtes enfants / adultes et clubs.
-- Consultation par code de compétition, affichage par aire.
-- Export Excel et impression PDF.
-
-### Critères de recette
-- Deux responsables de club ne peuvent pas consulter ou modifier leurs données privées respectives.
-- Un assistant ne peut pas opérer l’aire d’un autre.
-- Une double validation ne doit pas ajouter deux fois les scores.
-- Une requête fondée sur une révision périmée est refusée.
-- Tester tous les effectifs de 2 à 32, notamment 3, 5, 7 et 9.
-- Tester égalités complètes, repêchages multiples, exclusions et dau complémentaire.
-- Vérifier les classements après correction.
-- Tester le parcours sur ordinateur, tablette et téléphone.
-- Vérifier les sauvegardes, le redémarrage et la protection des pages publiques.
-
-## Lot 2 — Vat
-Rounds, pauses et prolongations comme en Dau ; scores de l’arbitre central, repêchage sur durée effective cumulée et classement.
-
-## Lot 3 — Quyens
-Quyen, Quyen Arme, notes au dixième, deux modes selon effectif, égalités à la qualification et au classement final, passages indépendants de départage.
-
-## Lot 4 — Équipes
-Constitution par l’organisateur, équipes multiclubs, Quyen synchro par groupe senior/non-senior, poule unique Dau équipe, effectifs asymétriques et départages.
-
-## Lot 5 — Répétition générale et mise en service
-Compétition fictive complète, postes simultanés, écran public, sauvegarde/restauration, validation avec officiels et assistants.
-
-Le dépôt GitHub et l’hébergement de l’application sont deux livraisons distinctes. Aucun hébergement public n’a encore été configuré.
-
+Le dépôt USONDIG/COMPVVD et le service compvvd-test sur Render sont configurés. La mise à jour de main déclenche le déploiement automatique.

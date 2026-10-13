@@ -20,6 +20,7 @@ from flask import Flask, abort, g, jsonify, redirect, render_template, request, 
 from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 from . import domain as d
+from . import disciplines as extra
 from .imports import read_registration_file
 from werkzeug.datastructures import MultiDict
 
@@ -129,18 +130,22 @@ def mutate(c,action,data):
         d.require(not any(x["name"].casefold()==p["name"].casefold() and x["birth"]==p["birth"] and x["club"]==p["club"] for x in c["people"]),"Participant déjà inscrit.")
         c["people"].append(dict(p,id=d.uid(),status="pending"))
         return
-    operator_actions={"start_table","advance","start","pause","score","sudden","decision","vat_point"}
+    operator_actions={"start_table","advance","start","pause","score","sudden","decision","vat_point","quyen_start","quyen_score","quyen_pause","pool_start"}
     if action not in operator_actions:
         manager(c)
     if action in ("approve","reject","edit"):
         p=find(c["people"],data.get("person"))
-        d.require(not any(p["id"] in t["members"] for t in c["tables"]),"Inscription verrouillée : participant déjà dans un tableau.")
+        d.require(not any(p["id"] in t["members"] for t in c["tables"]+c.get("teams",[])),"Inscription verrouillée : participant déjà dans un tableau.")
         if action=="edit":
             new=participant(data,c,p["club"])
             d.require(not any(x["id"]!=p["id"] and x["club"]==p["club"] and x["name"].casefold()==new["name"].casefold() and x["birth"]==new["birth"] for x in c["people"]),"Inscription en double.")
             p.update(new)
         else:
             p["status"]="approved" if action=="approve" else "rejected"
+    elif action=="team":
+        extra.team(c,data.get("name"),data.get("discipline"),data.getlist("members"),data.get("team") or None)
+    elif action=="remove_team":
+        extra.remove_team(c,data.get("team"))
     elif action=="discipline":
         name=data.get("discipline")
         d.require(name in d.DISCIPLINES,"Discipline invalide.")
@@ -172,26 +177,33 @@ def mutate(c,action,data):
         source,target=find(c["tables"],data.get("source")),find(c["tables"],data.get("target"))
         d.require(source["discipline"]==target["discipline"],"Fusion entre disciplines interdite.")
         d.require(source!=target and source["status"]==target["status"]=="draft","Fusion entre deux tableaux avant tirage uniquement.")
+        if source["discipline"]=="Quyen synchro":
+            groups={find(c["teams"],pid)["group"] for pid in source["members"]+target["members"]}
+            d.require(len(groups)==1,"Fusion seniors / moins de 18 ans interdite.")
         target["members"]+=source["members"]
         target["name"]+=" / "+source["name"]
         c["tables"].remove(source)
     elif action=="rotate_code":
         c["code"]=secrets.token_hex(6).upper()
-    elif action in {"configure","draw","correct"}|operator_actions:
+    elif action in {"configure","draw","correct","quyen_correct"}|operator_actions:
         t=find(c["tables"],data.get("table"))
         operator(c,t)
         if action=="configure":
             d.require(t["status"] in ("draft","ready"),"Le tableau a déjà commencé.")
             find(c["areas"],data.get("area"))
             judges=data.getlist("judges")
-            referee=data.get("referee")
-            d.require((not judges and referee) if t["discipline"]=="Vat" else len(judges)==3 and len(set(judges+[referee]))==4,"Officiels invalides : arbitre seul en Vat, trois juges et arbitre distincts en Dau.")
-            for official in judges+[referee]:
+            referee=data.get("referee") or None
+            quyen=t["discipline"] in extra.QUYEN
+            d.require((len(set(judges))==3 and len(judges)==3 and not referee) if quyen else
+                      ((not judges and referee) if t["discipline"]=="Vat" else len(judges)==3 and len(set(judges+[referee]))==4),
+                      "Officiels invalides : trois juges en Quyen, arbitre seul en Vat, trois juges et arbitre distincts en Dau.")
+            for official in judges+([referee] if referee else []):
                 find(c["officials"],official)
-            t.update(area=data["area"],judges=judges,referee=referee,
-                     rounds=d.integer(int(data["rounds"]),1,20,"Rounds"),
-                     seconds=d.integer(int(data["seconds"]),1,1800,"Durée"),
-                     rest=d.integer(int(data["rest"]),0,600,"Pause"))
+            t.update(area=data["area"],judges=judges,referee=referee)
+            if not quyen:
+                t.update(rounds=d.integer(int(data["rounds"]),1,20,"Rounds"),
+                         seconds=d.integer(int(data["seconds"]),1,1800,"Durée"),
+                         rest=d.integer(int(data["rest"]),0,600,"Pause"))
         elif action=="draw":
             d.draw(c,t)
         elif action=="start_table":
@@ -200,15 +212,35 @@ def mutate(c,action,data):
             d.start_table(c,t)
         elif action=="advance":
             d.advance(c,t)
+        elif action=="pool_start":
+            extra.pool_start(c,t,data.get("encounter"))
+        elif action.startswith("quyen_"):
+            d.require(t["discipline"] in extra.QUYEN,"Tableau Quyen requis.")
+            p=find(t["passes"],data.get("match"))
+            if action=="quyen_start":extra.quyen_start(c,t,p)
+            elif action=="quyen_score":extra.quyen_score(t,p,data.getlist("notes"))
+            elif action=="quyen_pause":
+                d.require(t["status"]=="active" and p["wave"]==t["wave"],"Passage indisponible.")
+                d.pause(p)
+            elif action=="quyen_correct":
+                d.require(not any(x["id"]!=t["id"] and x["status"]=="active" and
+                                 (x["area"]==t["area"] or set(x["judges"]+[x["referee"]])&set(t["judges"])) for x in c["tables"]),
+                          "Aire ou juges déjà engagés sur un autre tableau.")
+                extra.quyen_correct(t,p,data.getlist("notes"))
         else:
             m=find(t["matches"],data.get("match"))
             if action=="correct":
-                d.require(not any(x["id"]!=t["id"] and x["status"]=="active" and x["area"]==t["area"] for x in c["tables"]),"Cette aire accueille un autre tableau.")
+                d.require(not any(x["id"]!=t["id"] and x["status"]=="active" and (x["area"]==t["area"] or set(filter(None,x["judges"]+[x["referee"]])) & set(filter(None,t["judges"]+[t["referee"]]))) for x in c["tables"]),"Aire ou officiels déjà engagés sur un autre tableau.")
                 count=d.integer(int(data["count"]),0,22,"Nombre de rounds")
                 scores=[[[int(data[f"r{i}_{s}_{j}"]) for j in range(1 if t["discipline"]=="Vat" else 3)] for s in range(2)] for i in range(count)]
+                if t["discipline"]=="Dau équipe":
+                    extra.pool_correct(t,m,scores,data.get("winner"),data.get("reason"),data.getlist("votes"))
+                    return
                 d.correct(t,m,scores,data.get("winner"),data.get("reason"),data.getlist("votes"),float(data.get("duration","0")) if t["discipline"]=="Vat" else None)
                 return
             d.require(t["status"]=="active","Le tableau n’est pas en cours.")
+            if t["discipline"]=="Dau équipe":
+                d.require(t.get("active_encounter") and m.get("encounter")==t["active_encounter"],"Lancez d’abord la rencontre concernée.")
             if action=="start":
                 d.start_round(c,t,m)
             elif action=="pause":
@@ -219,7 +251,7 @@ def mutate(c,action,data):
             elif action=="vat_point":
                 d.vat_point(t,m,data.get("winner"))
             elif action=="sudden":
-                d.require(t["discipline"]=="Dau","La mort subite ne concerne pas la Vat.")
+                d.require(t["discipline"] in ("Dau","Dau équipe"),"La mort subite ne concerne pas la Vat.")
                 d.sudden(m,data.getlist("votes"))
             elif action=="decision":
                 d.require(m["state"] in ("pending","running","paused","rest"),"Résultat déjà validé.")
@@ -232,6 +264,7 @@ def public_view(c):
     out={k:c[k] for k in ("id","name","date","season","areas","tables")}
     out["areas"]=[dict(id=a["id"],name=a["name"]) for a in c["areas"]]
     out["people"]=[{k:p[k] for k in ("id","name","club")} for p in c["people"] if p["status"]=="approved"]
+    out["teams"]=[{k:x[k] for k in ("id","name","members","group","discipline")} for x in c.get("teams",[])]
     out["rankings"]=d.rankings(c)
     return out
 
@@ -342,7 +375,8 @@ def create_app(config=None):
         return dict(csrf=session.get("csrf",""),user=g.user,grades=d.GRADES,disciplines=d.DISCIPLINES,ages=d.AGES,fight_time=d.fight_time,
                     labels={"draft":"À préparer","ready":"Prêt","active":"En cours","closed":"Clôturé","pending":"En attente","approved":"Approuvé","rejected":"Refusé","running":"En cours","paused":"Suspendu","rest":"Pause","done":"Terminé"},
                     roles={"admin":"Administrateur","organizer":"Organisateur","club":"Responsable de club","assistant":"Assistant de table"},
-                    now=time.time())
+                    now=time.time(),quyen_disciplines=extra.QUYEN,team_disciplines=extra.TEAM,entry_names=extra.names,
+                    current_match=extra.current_match,pool_standings=extra.pool_standings,encounter_stats=extra.encounter_stats)
 
     def done(location):
         if request.headers.get("X-Requested-With")=="fetch":
@@ -446,7 +480,7 @@ def create_app(config=None):
         is_manager=managed(c)
         if g.user["role"]=="club":
             c["people"]=[p for p in c["people"] if p["club"]==g.user["club"]]
-            c["tables"],c["areas"],c["officials"]=[],[],[]
+            c["tables"],c["areas"],c["officials"],c["teams"]=[],[],[],[]
             c.pop("code",None)
         elif not is_manager:
             c["people"]=[{k:p[k] for k in ("id","name","club")} for p in c["people"]]
@@ -470,6 +504,8 @@ def create_app(config=None):
         revision=c.pop("revision")
         g.db.execute("UPDATE competitions SET state=?,revision=revision+1 WHERE id=?",(json.dumps(c,ensure_ascii=False),cid))
         detail={k:request.form.getlist(k) for k in request.form if k not in ("csrf","revision")}
+        if name=="quyen_correct":
+            detail["before"]=[p for t in before["tables"] for p in t.get("passes",[]) if p["id"]==request.form.get("match")]
         if name=="correct":
             detail["before"]=[m for t in before["tables"] for m in t["matches"] if m["id"]==request.form.get("match")]
         audit(name,cid,detail)
@@ -483,7 +519,7 @@ def create_app(config=None):
         c=competition(cid)
         t=find(c["tables"],tid)
         operator(c,t)
-        return render_template("table.html",c=c,t=t,manager=managed(c),people={p["id"]:p for p in c["people"]},
+        return render_template("quyen.html" if t["discipline"] in extra.QUYEN else "table.html",c=c,t=t,manager=managed(c),people={p["id"]:p for p in c["people"]},
             officials={o["id"]:o["name"] for o in c["officials"]},area=next((a for a in c["areas"] if a["id"]==t["area"]),{}))
 
     @app.get("/c/<cid>/import/template")
