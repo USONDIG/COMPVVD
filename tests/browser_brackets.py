@@ -45,6 +45,16 @@ with tempfile.TemporaryDirectory() as tmp:
         assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2')
         tree.locator('xpath=..').evaluate('(el)=>{el.scrollLeft=150}')
         page.screenshot(path='test-results/arbre-public-mobile.png',full_page=True)
+        # Close a real elimination table to verify the podium and one-page printing together.
+        while t['status']!='closed':
+            for match in t['matches']:
+                if match['state']!='done':
+                    match.update(sa=5,sb=2);d.finish(match,match['a'],'points')
+            d.advance(c,t)
+        save()
+        expect(tree.locator('[data-place]')).to_have_count(5,timeout=12000)
+        page.set_viewport_size({'width':1440,'height':1000})
+        page.screenshot(path='test-results/podium-public.png',full_page=True)
         print_page=context.new_page()
         print_page.set_viewport_size({'width':1400,'height':1000})
         for table in (t,vt):
@@ -54,6 +64,7 @@ with tempfile.TemporaryDirectory() as tmp:
             reader=PdfReader(BytesIO(pdf));assert len(reader.pages)==1,len(reader.pages)
             assert 'Finale' in reader.pages[0].extract_text()
             assert 'Concurrent' in reader.pages[0].extract_text()
+            if table is t:assert 'Podium final' in reader.pages[0].extract_text()
         print_page.goto(base+f'/public/print?kind=tree&table={t["id"]}&paper=a3')
         pdf=print_page.pdf(prefer_css_page_size=True,print_background=True,path='test-results/arbre-a3.pdf')
         assert len(PdfReader(BytesIO(pdf)).pages)==1

@@ -91,4 +91,15 @@ def diagram(t,names,clubs=None):
         x1=a['x']+CARD_W;y1=a['y']+CARD_H/2;x2=b['x'];y2=b['y']+(64 if e['side']=='a' else 109)
         mid=x1+(x2-x1)/2
         e['path']=f'M {x1} {y1} H {mid} V {y2} H {x2}'
-    return dict(nodes=nodes,edges=edges,width=max(n['x']+CARD_W for n in nodes)+24,height=max(n['y']+CARD_H for n in nodes)+36)
+    width=max(n['x']+CARD_W for n in nodes)+24
+    height=max(n['y']+CARD_H for n in nodes)+36
+    podium=[];podium_y=height+24
+    if t['status']=='closed':
+        width=max(width,1200)
+        card_width=(width-96)/5
+        for rank in range(1,6):
+            pid=t.get('places',{}).get(str(rank))
+            podium.append(dict(rank=rank,pid=pid,name=names.get(pid,'Non attribuée'),club=clubs.get(pid,''),
+                               x=24+(rank-1)*(card_width+12),width=card_width))
+        height+=190
+    return dict(nodes=nodes,edges=edges,width=width,height=height,podium=podium,podium_y=podium_y)
