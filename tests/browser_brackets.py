@@ -2,6 +2,7 @@
 from contextlib import closing
 from io import BytesIO
 import json
+import unicodedata
 from pathlib import Path
 import sys,tempfile,threading
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
@@ -64,7 +65,7 @@ with tempfile.TemporaryDirectory() as tmp:
             reader=PdfReader(BytesIO(pdf));assert len(reader.pages)==1,len(reader.pages)
             assert 'Finale' in reader.pages[0].extract_text()
             assert 'Concurrent' in reader.pages[0].extract_text()
-            if table is t:assert 'Podium final' in reader.pages[0].extract_text()
+            if table is t:assert 'Podium final' in unicodedata.normalize('NFKC',reader.pages[0].extract_text())
         print_page.goto(base+f'/public/print?kind=tree&table={t["id"]}&paper=a3')
         pdf=print_page.pdf(prefer_css_page_size=True,print_background=True,path='test-results/arbre-a3.pdf')
         assert len(PdfReader(BytesIO(pdf)).pages)==1
