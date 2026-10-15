@@ -484,13 +484,32 @@ def create_app(config=None):
             c["tables"],c["areas"],c["officials"],c["teams"]=[],[],[],[]
             c.pop("code",None)
         elif not is_manager:
-            c["people"]=[{k:p[k] for k in ("id","name","club")} for p in c["people"]]
-            c["tables"]=[t for t in c["tables"] if any(a["id"]==t["area"] and a["assistant"]==g.user["id"] for a in c["areas"])]
-            c.pop("code",None)
+            return redirect(url_for('operations',cid=cid))
         return render_template("competition.html",c=c,manager=is_manager,
             clubs={r["id"]:r["name"] for r in rows("SELECT * FROM clubs")},
             assistants=rows("SELECT id,name FROM users WHERE role='assistant' AND active=1") if is_manager else [],
             rankings=d.rankings(c) if is_manager else None)
+
+    @app.get('/c/<cid>/operations')
+    def operations(cid):
+        c=competition(cid)
+        if not visible(c) or g.user['role']=='club':abort(403)
+        is_manager=managed(c)
+        rankings=d.rankings(c) if is_manager else None
+        if not is_manager:
+            c['areas']=[a for a in c['areas'] if a['assistant']==g.user['id']]
+            c['tables']=[t for t in c['tables'] if t['area'] in {a['id'] for a in c['areas']}]
+            c.pop('code',None)
+        c['people']=[{k:p[k] for k in ('id','name','club')} for p in c['people']]
+        groups=[dict(a,tables=[t for t in c['tables'] if t['area']==a['id']]) for a in c['areas']]
+        unassigned=[t for t in c['tables'] if not any(a['id']==t['area'] for a in c['areas'])]
+        if is_manager and unassigned:groups.append(dict(id='unassigned',name='Aire à affecter',assistant=None,tables=unassigned))
+        selected=request.args.get('area','')
+        if selected and selected not in {a['id'] for a in groups}:abort(404)
+        return render_template('operations.html',c=c,manager=is_manager,groups=groups,selected_area=selected,
+            officials={o['id']:o['name'] for o in c['officials']},
+            assistants={r['id']:r['name'] for r in rows("SELECT id,name FROM users WHERE role='assistant'")},
+            clubs={r['id']:r['name'] for r in rows('SELECT * FROM clubs')},rankings=rankings)
 
     @app.post("/c/<cid>/action")
     def action(cid):
@@ -511,8 +530,9 @@ def create_app(config=None):
             detail["before"]=[m for t in before["tables"] for m in t["matches"] if m["id"]==request.form.get("match")]
         audit(name,cid,detail)
         dest="/c/"+cid
-        if request.form.get("table"):
-            dest+="/table/"+request.form["table"]
+        if name in ('configure','draw','generate','merge'):dest+='#tableaux'
+        elif request.form.get('table'):dest+='/table/'+request.form['table']
+        elif name=='rotate_code':dest+='/operations#spectateurs'
         return done(dest)
 
     @app.get("/c/<cid>/table/<tid>")

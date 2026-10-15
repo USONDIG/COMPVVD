@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% from "macros.html" import field,post,status with context %}{% from "discipline_macros.html" import quyen_results,quyen_board with context %}
 {% block content %}{% set names=entry_names(c) %}
-<div class="row between no-print"><a href="/c/{{c.id}}#tableaux">← {{c.name}}</a><button class="secondary" data-print>Imprimer / PDF</button></div><br><div class="eyebrow">{{area.get('name','Aire à affecter')}} · {{t.discipline}}</div><div class="row between"><h1>{{t.name}}</h1>{{status(t.status)}}</div>
+<div class="row between no-print"><a href="/c/{{c.id}}/operations">← Déroulement · {{c.name}}</a><button class="secondary" data-print>Imprimer / PDF</button></div><br><div class="eyebrow">{{area.get('name','Aire à affecter')}} · {{t.discipline}}</div><div class="row between"><h1>{{t.name}}</h1>{{status(t.status)}}</div>
 <p class="hint">Trois notes de 6,0 à 10,0 au dixième. {% if t.members|length>5 %}Les cinq meilleurs du premier tour sont qualifiés. Seules les notes du second tour comptent pour le classement final.{% else %}Tous les inscrits effectuent deux tours. Le classement additionne les notes des deux tours.{% endif %} Les égalités nécessaires sont départagées par un nouveau passage indépendant.</p>
 {% if t.discipline=='Quyen synchro' %}<p class="muted">Équipes de 2 à 6 · aucune contribution aux classements individuels ou par club.</p>{% endif %}
 {% if t.started %}<p>Durée du tableau : <strong data-duration="{{t.started}}" data-closed="{{t.closed or ''}}">—</strong></p>{% endif %}
