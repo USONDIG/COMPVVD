@@ -1,0 +1,3 @@
+<nav class="competition-spaces no-print" aria-label="Espaces de la compétition">
+{% if manager or user.role=='club' %}<a href="/c/{{c.id}}" {% if request.endpoint=='view' %}aria-current="page"{% endif %}><strong>{{'Inscriptions et préparation' if manager else 'Inscriptions de mon club'}}</strong><span>Participants{% if manager %}, équipes et tableaux{% endif %}</span></a>{% endif %}
+{% if user.role!='club' %}<a href="/c/{{c.id}}/operations" {% if request.endpoint=='operations' %}aria-current="page"{% endif %}><strong>Déroulement</strong><span>Aires, lancement et saisie des résultats</span></a>{% endif %}</nav>

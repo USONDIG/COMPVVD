@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% from "macros.html" import field,post,status,bracket,board,tree with context %}
 {% from "discipline_macros.html" import pool_results with context %}
 {% block content %}{% set names=entry_names(c) %}
-<div class="row between no-print"><a href="/c/{{c.id}}#tableaux">← {{c.name}}</a><a class="button secondary" target="_blank" rel="noopener" href="/c/{{c.id}}/print?kind=table&amp;table={{t.id}}">Imprimer le classement / PDF</a></div><br><div class="eyebrow">{{area.get('name','Aire à affecter')}} · {{t.discipline}}</div><div class="row between"><h1>{{t.name}}</h1>{{status(t.status)}}</div>
+<div class="row between no-print"><a href="/c/{{c.id}}/operations">← Déroulement · {{c.name}}</a><a class="button secondary" target="_blank" rel="noopener" href="/c/{{c.id}}/print?kind=table&amp;table={{t.id}}">Imprimer le classement / PDF</a></div><br><div class="eyebrow">{{area.get('name','Aire à affecter')}} · {{t.discipline}}</div><div class="row between"><h1>{{t.name}}</h1>{{status(t.status)}}</div>
 <p class="muted">{{t.rounds}} rounds de {{t.seconds}} secondes · {{t.rest}} secondes de pause{% if t.discipline=="Vat" %} · scores annoncés par l’arbitre central{% endif %}</p>
 {% if t.started %}<p>Durée du tableau : <strong data-duration="{{t.started}}" data-closed="{{t.closed or ''}}">—</strong></p>{% endif %}
 {% if t.discipline=="Dau équipe" %}{{pool_results(t,names)}}{% else %}{{tree(t,names)}}{% endif %}
